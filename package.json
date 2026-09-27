@@ -1,0 +1,32 @@
+{
+  "name": "skytrace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/web dev:all",
+    "web": "bun run --cwd apps/web dev",
+    "backend": "bun run --cwd apps/web backend",
+    "build": "bun run --cwd apps/web build",
+    "typecheck": "tsc -b --noEmit",
+    "data:build": "bun run packages/data/scripts/build-data.ts",
+    "check:resolver": "bun run packages/flight-core/scripts/parse-check.ts",
+    "check:csv": "bun run apps/web/scripts/check-csv.ts",
+    "check": "bun run check:resolver && bun run check:csv",
+    "convex": "bun run --cwd apps/web convex"
+  },
+  "dependencies": {
+    "@skytrace/data": "workspace:*",
+    "@skytrace/flight-core": "workspace:*",
+    "@skytrace/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "convex": "^1.46.0",
+    "typescript": "^5.7.3"
+  }
+}
