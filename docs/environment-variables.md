@@ -5,8 +5,14 @@ The app reads exactly one variable. Everything else is derived.
 | Variable | Where | Required | What it is |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | API | In production | A Postgres connection string. The one thing the app cannot run without. |
+| `ALLOWED_ORIGINS` | API | When split across hosts | Comma-separated list of frontend origins allowed to call the API. |
+| `VITE_API_URL` | Build | When split across hosts | The API's base URL, baked into the frontend at build time. |
 | `API_PORT` | Development | No | The port the API listens on. Defaults to `3210`. |
 | `API_ORIGIN` | Development | No | Overrides the address the Vite dev server proxies `/api` to. Rarely needed. |
+
+The app currently runs with the frontend and the API on **different hosts**: the
+frontend on Vercel, the API on Render. That needs the two variables in the
+middle, and nothing else changes.
 
 ## DATABASE_URL
 
@@ -48,6 +54,54 @@ The one thing to check first when nobody can sign in is:
 ```bash
 curl -s https://your-deployment.example/api/health
 ```
+
+## Running the frontend and API on different hosts
+
+When the two are on the same origin — Vercel serving both, or the Vite dev
+server proxying `/api` — there is nothing to configure. The browser calls
+`/api/...` on its own origin and the session is a plain same-origin cookie.
+
+Split across hosts, three things must line up, and all three fail *silently*
+when they do not: the browser discards the response rather than reporting
+anything, so the app looks merely broken.
+
+**On the API (Render):** `ALLOWED_ORIGINS`
+
+```
+ALLOWED_ORIGINS=https://flight-visualizer-frontend-cyan.vercel.app
+```
+
+Origins, not URLs-with-paths, comma-separated for more than one. This is an
+allowlist, not a pattern, and `*` is refused: it would let any site on the
+internet read this user's flight log using their session. A request from an
+origin not on the list is answered without any CORS header, which the browser
+then blocks.
+
+**On the frontend (Vercel):** `VITE_API_URL`
+
+```
+VITE_API_URL=https://flight-visualizer.onrender.com
+```
+
+This one is read at **build** time, so it must be set in the project's
+environment settings and the project redeployed — setting it after a build
+changes nothing, and the symptom is the frontend still calling its own origin.
+
+`ALLOWED_ORIGINS` also switches the session cookie to `SameSite=None; Secure`,
+because a `Lax` cookie is never sent on a cross-site request. Sign-in would
+otherwise appear to succeed and then forget you on the next page.
+
+### Checking it worked
+
+```bash
+curl -s https://flight-visualizer.onrender.com/api/health
+```
+
+Then, from a browser signed out, the sign-in button on the deployed frontend
+should create an account. If it fails, the two variables above are the first
+thing to compare against what the browser actually sent — the **Network** tab
+shows the `Origin` the request carried, and whether the response had an
+`Access-Control-Allow-Origin` header.
 
 ## Creating the tables
 

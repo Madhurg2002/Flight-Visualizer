@@ -164,14 +164,54 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Where the API is.
+ *
+ * Unset, requests go to `/api` on the page's own origin, which is what
+ * development does and what a single-origin deployment does.
+ *
+ * Set — `VITE_API_URL=https://flight-visualizer.onrender.com` — requests go to
+ * that host instead, and the session becomes a cross-site cookie. The API has
+ * to allow this origin explicitly, or the browser discards every response.
+ */
+const configuredBase = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? "";
+
+/** Absolute when the API is on another host, relative otherwise. */
+export const apiBase = configuredBase === "" ? "" : configuredBase.replace(/\/+$/, "");
+
+/** True when the API is on a different origin to the page. */
+export const isCrossOrigin = apiBase !== "" && apiBase !== window.location.origin;
+
+/**
+ * The one place a request is actually made.
+ *
+ * Auth and the data client both go through here, because the two settings that
+ * make a cross-origin session work have to be identical everywhere: the
+ * credentials mode and the CSRF header. Getting one of them right and the other
+ * wrong produces a sign-in that appears to work and then quietly forgets you.
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  // Forces a preflight, which a form post or an image tag cannot produce. That
+  // is what stops another site writing to this account with the user's cookie
+  // attached; see `isBlockedByCsrf` on the server.
+  headers.set("x-skytrace-client", "1");
+
+  return fetch(`${apiBase}/api${path}`, {
+    ...init,
+    headers,
+    // `include` when cross-origin so the session cookie is sent at all; it is
+    // ignored for same-origin requests, so one setting covers both.
+    credentials: isCrossOrigin ? "include" : "same-origin",
+  });
+}
+
 async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await apiFetch(path, {
     method,
-    // Same-origin, so the session cookie is sent; without this the fetch would
-    // carry no credentials and every signed-in request would come back
-    // anonymous.
-    credentials: "same-origin",
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

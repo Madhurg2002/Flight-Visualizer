@@ -158,6 +158,8 @@ await client.exec(indexSql());
 function makeClient() {
   let cookie: string | null = null;
   return {
+    /** The attributes of the last session cookie set, for assertions. */
+    lastCookie: [] as string[],
     async call(method: string, path: string, body?: unknown) {
       const headers: Record<string, string> = {};
       if (body !== undefined) headers["content-type"] = "application/json";
@@ -174,6 +176,11 @@ function makeClient() {
       for (const entry of response.headers.getSetCookie?.() ?? []) {
         const pair = entry.split(";")[0]!;
         cookie = pair.endsWith("=") ? null : pair;
+        this.lastCookie = entry
+          .split(";")
+          .slice(1)
+          .map((part) => part.trim())
+          .filter((part) => part !== "Path=/" && !part.startsWith("Max-Age="));
       }
 
       const text = await response.text();
@@ -515,7 +522,9 @@ console.log("public endpoints");
 
 console.log("routing");
 {
-  equal("health reports a database", (await handleRequest(new Request("https://x/api/health"))).status, 200);
+  const health = await handleRequest(new Request("https://x/api/health"));
+  equal("health is reachable and reports the database is ready", [health.status, (await health.clone().json()).database], [200, "ready"]);
+
   equal("health is GET only", (await handleRequest(new Request("https://x/api/health", { method: "POST" }))).status, 405);
   equal("an unknown path is 404", (await handleRequest(new Request("https://x/api/nope"))).status, 404);
   equal("a wrong method is 405", (await handleRequest(new Request("https://x/api/flights/stats", { method: "POST" }))).status, 405);
@@ -660,6 +669,158 @@ console.log("node adapter");
   equal("relays a real response verbatim", relayed.statusCode, 200);
   equal("with its session cookie intact", (relayed.headers["set-cookie"] as string[]).length, 1);
   equal("and its body", JSON.parse(relayed.body).email.startsWith("adapter-"), true);
+}
+
+console.log("cross-origin");
+{
+  // The frontend is on Vercel and the API on Render, so every browser request
+  // is cross-site. These are the three things that silently break sign-in when
+  // they are wrong, and none of them fail loudly: the browser just discards
+  // the response, or never sends the cookie, and the app looks merely broken.
+  const { resetCorsCache, isCrossOriginMode, isAllowedOrigin, isBlockedByCsrf } = await import(
+    "../server/cors.ts"
+  );
+  const FRONTEND = "https://flight-visualizer-frontend-cyan.vercel.app";
+  const API = "https://flight-visualizer.onrender.com";
+
+  const from = (origin: string | null, init: RequestInit = {}) =>
+    new Request(`${API}/api/flights`, {
+      ...init,
+      headers: { ...(origin ? { origin } : {}), ...((init.headers as object) ?? {}) },
+    });
+
+  resetCorsCache();
+  delete process.env.ALLOWED_ORIGINS;
+  equal("with nothing configured, it stays single-origin", isCrossOriginMode(), false);
+  check("a request with no Origin is never restricted", isAllowedOrigin(from(null)));
+  check("a request with some Origin is refused when none is allowed", !isAllowedOrigin(from("https://evil.example")));
+
+  process.env.ALLOWED_ORIGINS = `${FRONTEND} , https://other.example/`;
+  resetCorsCache();
+  equal("an allowlist turns on cross-origin mode", isCrossOriginMode(), true);
+  check("the configured frontend is allowed", isAllowedOrigin(from(FRONTEND)));
+  check("a trailing slash does not break the match", isAllowedOrigin(from(`${FRONTEND}/`)));
+  check("a second origin in the list is allowed", isAllowedOrigin(from("https://other.example")));
+  check("an unlisted origin is refused", !isAllowedOrigin(from("https://evil.example")));
+  check(
+    "a look-alike origin is refused",
+    !isAllowedOrigin(from("https://flight-visualizer-frontend-cyan.vercel.app.evil.example")),
+  );
+
+  process.env.ALLOWED_ORIGINS = "*";
+  resetCorsCache();
+  equal("a wildcard is refused rather than honoured", isCrossOriginMode(), false);
+
+  // Responses must carry the headers, not just the preflight.
+  resetCorsCache();
+  process.env.ALLOWED_ORIGINS = FRONTEND;
+  resetCorsCache();
+  const allowed = await handleRequest(from(FRONTEND));
+  check("an allowed origin appears in the response", allowed.headers.get("access-control-allow-origin") === FRONTEND);
+  equal("credentials are explicitly allowed", allowed.headers.get("access-control-allow-credentials"), "true");
+  check("and the response varies on Origin, so a CDN cannot mix them up", (allowed.headers.get("vary") ?? "").includes("Origin"));
+  check(
+    "the origin is never sent as a wildcard",
+    allowed.headers.get("access-control-allow-origin") !== "*",
+  );
+
+  const refused = await handleRequest(from("https://evil.example"));
+  check("a refused origin gets no allow header", refused.headers.get("access-control-allow-origin") === null);
+
+  const preflight = await handleRequest(
+    from(FRONTEND, { method: "OPTIONS", headers: { "access-control-request-method": "POST" } }),
+  );
+  equal("the preflight succeeds for an allowed origin", preflight.status, 204);
+  check("and advertises the client header", (preflight.headers.get("access-control-allow-headers") ?? "").includes("x-skytrace-client"));
+  equal(
+    "a preflight from an unlisted origin is refused",
+    (await handleRequest(from("https://evil.example", { method: "OPTIONS" }))).status,
+    403,
+  );
+
+  // CSRF: another site may not write with the user's cookie attached.
+  // Posted at a real POST route, so a 405 for the wrong method cannot be
+  // mistaken for the 403 this is checking for.
+  const crossPost = (headers: Record<string, string>) =>
+    new Request(`${API}/api/flights/add`, {
+      method: "POST",
+      headers: { origin: FRONTEND, ...headers },
+      body: "{}",
+    });
+  check(
+    "a cross-origin write without the client header is blocked",
+    isBlockedByCsrf(crossPost({})),
+  );
+  check(
+    "a cross-origin write with it is allowed",
+    !isBlockedByCsrf(crossPost({ "x-skytrace-client": "1" })),
+  );
+  check(
+    "a same-origin write is not restricted",
+    !isBlockedByCsrf(
+      new Request(`${API}/api/flights/add`, { method: "POST", body: "{}" }),
+    ),
+  );
+  equal(
+    "and the router actually refuses it",
+    (await handleRequest(crossPost({}))).status,
+    403,
+  );
+
+  // The cookie has to be cross-site capable, or sign-in silently forgets you.
+  const signedIn = makeClient();
+  await signedIn.call("POST", "/api/auth/signup", { email: `cors-${Date.now()}@example.com`, password: "a-good-password" });
+  equal(
+    "the session cookie is SameSite=None when cross-origin",
+    signedIn.lastCookie,
+    ["HttpOnly", "SameSite=None", "Secure"],
+  );
+
+  process.env.ALLOWED_ORIGINS = "";
+  resetCorsCache();
+  const single = makeClient();
+  await single.call("POST", "/api/auth/signup", { email: `same-${Date.now()}@example.com`, password: "a-good-password" });
+  equal(
+    "and SameSite=Lax when it is not",
+    single.lastCookie,
+    // `Secure` as well: the test client speaks HTTPS, and a cookie without it
+    // would be rejected by a browser anyway.
+    ["HttpOnly", "SameSite=Lax", "Secure"],
+  );
+
+  delete process.env.ALLOWED_ORIGINS;
+  resetCorsCache();
+}
+
+console.log("database failures");
+{
+  // The point of this section: a database that is configured but unusable is
+  // the hardest failure to diagnose, and it used to be a bare 500. Each of
+  // these is what a real deployment looks like when something is missing.
+  const { diagnoseDatabaseError } = await import("../server/db-errors.ts");
+
+  const cases: [string, unknown, string][] = [
+    ["tables never created", { code: "42P01", message: 'relation "users" does not exist' }, "db:push"],
+    ["schema out of date", { code: "42703", message: 'column "foo" does not exist' }, "db:push"],
+    ["database does not exist", { code: "3D000", message: 'database "skytrace" does not exist' }, "connection string"],
+    ["wrong password", { code: "28P01", message: "password authentication failed for user \"x\"" }, "password"],
+    ["host does not resolve", { message: "getaddrinfo ENOTFOUND db.example.com" }, "DATABASE_URL"],
+  ];
+
+  for (const [name, error, expect] of cases) {
+    const diagnosis = diagnoseDatabaseError(error);
+    check(`recognises: ${name}`, diagnosis !== null);
+    check(
+      `  and says what to do: ${name}`,
+      (diagnosis?.remedy ?? "").includes(expect),
+      diagnosis?.remedy,
+    );
+  }
+
+  check("a state inside the message is still found", diagnoseDatabaseError({ message: '[42P01] relation "x" does not exist' }) !== null);
+  check("a numeric code is still found", diagnoseDatabaseError({ code: 42, message: "relation \"x\" does not exist" }) !== null);
+  check("an unrelated error is not guessed at", diagnoseDatabaseError(new Error("kaboom")) === null);
+  check("a non-error is not guessed at", diagnoseDatabaseError(null) === null);
 }
 
 /* ------------------------------------------------------------------ wrap up */

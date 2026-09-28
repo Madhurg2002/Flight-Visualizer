@@ -4,7 +4,9 @@ import * as auth from "./routes/auth.ts";
 import * as flightRoutes from "./routes/flights.ts";
 import * as resolveRoutes from "./routes/resolve.ts";
 import * as tripRoutes from "./routes/trips.ts";
-import { MissingDatabaseUrlError, isDatabaseConfigured } from "../db/client.ts";
+import { MissingDatabaseUrlError, isDatabaseConfigured, probeDatabase } from "../db/client.ts";
+import { diagnoseDatabaseError } from "./db-errors.ts";
+import { CSRF_HEADER, isAllowedOrigin, isBlockedByCsrf, withCors } from "./cors.ts";
 
 /**
  * The API.
@@ -79,20 +81,34 @@ export async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders() });
+    return preflight(req);
   }
 
-  const health = handleHealth(url, req.method);
-  if (health) return health;
+  const health = await handleHealth(url, req.method);
+  if (health) return finish(req, health, null);
 
   if (!url.pathname.startsWith("/api/")) {
-    return json({ error: "Not found" }, { status: 404 });
+    return finish(req, json({ error: "Not found" }, { status: 404 }), null);
   }
 
   const found = match(req.method, url.pathname.slice("/api".length));
-  if (!found) return json({ error: "Not found" }, { status: 404 });
+  if (!found) return finish(req, json({ error: "Not found" }, { status: 404 }), null);
   if ("allow" in found) {
-    return json({ error: "Method not allowed" }, { status: 405, headers: { allow: found.allow.join(", ") } });
+    return finish(
+      req,
+      json({ error: "Method not allowed" }, { status: 405, headers: { allow: found.allow.join(", ") } }),
+      null,
+    );
+  }
+
+  // A write from another site that did not come from this app. Checked before
+  // any work, so a hostile page cannot make the server touch the database.
+  if (isBlockedByCsrf(req)) {
+    return finish(
+      req,
+      json({ error: "Blocked: cross-origin request is missing the client header." }, { status: 403 }),
+      null,
+    );
   }
 
   const ctx = makeCtx(req);
@@ -103,32 +119,83 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     const body = await found.route.handle(ctx);
     const response = body === undefined ? new Response(null, { status: 204 }) : json(body);
-    return withCookies(response, ctx);
+    return finish(req, response, ctx);
   } catch (error) {
-    return errorResponse(error);
+    return finish(req, errorResponse(error), null);
   }
 }
 
 /**
- * Liveness, and the first thing to check when the app is not signing anyone in.
- * Reports whether a database is configured *without* touching it, so it stays
- * fast and still works when the connection string is missing.
+ * The single exit point for every response.
+ *
+ * CORS headers go on *every* response, not just the preflight. A browser
+ * enforces the preflight before it will even send the real request, but the
+ * real request's own response still has to say who may read it — putting the
+ * header only on the OPTIONS reply is the classic way to end up with a
+ * preflight that passes and a response the browser throws away.
  */
-function handleHealth(url: URL, method: string): Response | null {
+function finish(req: Request, response: Response, ctx: Ctx | null): Response {
+  const headers = new Headers(response.headers);
+  if (ctx) for (const cookie of ctx.setCookies) headers.append("set-cookie", cookie);
+  return new Response(response.body, {
+    status: response.status,
+    headers: withCors(req, headers),
+  });
+}
+
+/**
+ * The preflight reply, which advertises what the browser is allowed to send.
+ *
+ * A disallowed origin gets a 403 rather than a bare 204: the browser would
+ * block the response either way, but a 403 is legible in a network log, where
+ * an empty 204 looks like a server that is merely slow.
+ */
+function preflight(req: Request): Response {
+  const originSent = req.headers.get("origin") !== null;
+  if (originSent && !isAllowedOrigin(req)) {
+    return new Response(null, { status: 403, headers: new Headers({ vary: "Origin" }) });
+  }
+
+  const headers = withCors(req, new Headers());
+  if (originSent) {
+    headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
+    headers.set("access-control-allow-headers", `content-type, ${CSRF_HEADER}`);
+    headers.set("access-control-max-age", "600");
+  }
+  return new Response(null, { status: 204, headers });
+}
+
+/**
+ * Liveness, and the first thing to check when the app is not signing anyone in.
+ *
+ * It actually talks to the database. Reporting "configured" from the presence
+ * of a variable was worse than reporting nothing: it stayed green against a
+ * database that had no tables, so the first sign of trouble was a 500 on the
+ * first real request. One round trip is a cheap price for knowing.
+ */
+async function handleHealth(url: URL, method: string): Promise<Response | null> {
   if (url.pathname !== "/api/health") return null;
   if (method !== "GET") {
     return json({ error: "Method not allowed" }, { status: 405, headers: { allow: "GET" } });
   }
-  return json({ ok: true, database: isDatabaseConfigured() ? "configured" : "missing" });
-}
 
-function withCookies(response: Response, ctx: Ctx): Response {
-  if (ctx.setCookies.length === 0) return response;
-  // `Headers.append` rather than a plain assignment: a route can set more than
-  // one cookie, and assigning would keep only the last.
-  const headers = new Headers(response.headers);
-  for (const cookie of ctx.setCookies) headers.append("set-cookie", cookie);
-  return new Response(response.body, { status: response.status, headers });
+  if (!isDatabaseConfigured()) {
+    return json({ ok: true, database: "missing", remedy: "Set DATABASE_URL." });
+  }
+
+  const probe = await probeDatabase();
+  if (probe.ok) return json({ ok: true, database: "ready" });
+
+  const diagnosis = diagnoseDatabaseError(probe.error);
+  return json(
+    {
+      ok: true,
+      database: diagnosis?.summary.startsWith("The database is reachable") ? "no-tables" : "unreachable",
+      problem: diagnosis?.summary ?? "The database could not be reached.",
+      ...(diagnosis?.remedy ? { remedy: diagnosis.remedy } : {}),
+    },
+    { status: 503 },
+  );
 }
 
 function errorResponse(error: unknown): Response {
@@ -143,14 +210,15 @@ function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) {
     return json({ error: error.message }, { status: error.status });
   }
+  // A database that is unreachable, has no tables, or is a version behind is a
+  // deployment problem with one obvious fix, and it is the hardest kind of
+  // failure to diagnose from a generic 500 plus a log that has already scrolled
+  // away. Recognised by SQLSTATE, so nothing about the connection is revealed.
+  const diagnosis = diagnoseDatabaseError(error);
+  if (diagnosis) {
+    return json({ error: `${diagnosis.summary} ${diagnosis.remedy}` }, { status: 503 });
+  }
   console.error("Unhandled API error", error);
   return json({ error: "Something went wrong. Please try again." }, { status: 500 });
 }
 
-function corsHeaders(): Record<string, string> {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET, POST, OPTIONS",
-  };
-}

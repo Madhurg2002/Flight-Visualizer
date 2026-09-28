@@ -7,6 +7,7 @@ import {
   sessionCookie,
   str,
 } from "../http.ts";
+import { isCrossOriginMode } from "../cors.ts";
 import { MIN_PASSWORD_LENGTH, hashPassword, verifyPassword } from "../password.ts";
 import { createSession, revokeSession, type Ctx } from "../session.ts";
 
@@ -56,7 +57,9 @@ function readCredentials(body: Record<string, unknown>): { email: string; passwo
 
 async function startSession(ctx: Ctx, userId: string, email: string): Promise<{ email: string }> {
   const token = await createSession(userId);
-  ctx.setCookies.push(sessionCookie(token, useSecureCookies(ctx)));
+  // Cross-site when a separate frontend origin is configured, which is what
+  // makes the browser send the cookie back at all.
+  ctx.setCookies.push(sessionCookie(token, useSecureCookies(ctx), isCrossOriginMode()));
   return { email };
 }
 
@@ -95,7 +98,7 @@ export async function signIn(ctx: Ctx): Promise<{ email: string }> {
 
 export async function signOut(ctx: Ctx): Promise<void> {
   await revokeSession(ctx.req);
-  ctx.setCookies.push(clearedSessionCookie(useSecureCookies(ctx)));
+  ctx.setCookies.push(clearedSessionCookie(useSecureCookies(ctx), isCrossOriginMode()));
 }
 
 /**

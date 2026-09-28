@@ -58,3 +58,23 @@ export function getDb(): Database {
 export function isDatabaseConfigured(): boolean {
   return override !== null || Boolean(process.env.DATABASE_URL);
 }
+
+/**
+ * Asks the database whether it is actually usable.
+ *
+ * `/api/health` used to report `configured` on the strength of a variable
+ * existing, which is the most misleading thing a health check can say: it
+ * stayed green with a connection string pointing at a database with no tables
+ * in it, so the first sign of trouble was a 500 on the first real request.
+ *
+ * `select 1` is one round trip, and on Neon's HTTP driver it costs nothing
+ * when the database is asleep.
+ */
+export async function probeDatabase(): Promise<{ ok: true } | { ok: false; error: unknown }> {
+  try {
+    await getDb().execute("select 1");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}

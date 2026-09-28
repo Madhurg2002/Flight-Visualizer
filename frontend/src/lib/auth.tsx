@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from "react";
-import { invalidateQueries } from "./api";
+import { apiFetch, invalidateQueries } from "./api";
 
 /**
  * Sign-in state, replacing Convex Auth.
@@ -58,7 +58,11 @@ function getState(): AuthState {
 
 async function refresh(): Promise<AuthState> {
   try {
-    const response = await fetch("/api/users/me", { credentials: "same-origin" });
+    // Through `apiFetch`, so this carries the same credentials mode and CSRF
+    // header as every other call. A second, hand-rolled `fetch` here would be
+    // how a cross-origin deployment ends up signed in on one screen and signed
+    // out on the next.
+    const response = await apiFetch("/users/me");
     if (!response.ok) throw new Error(String(response.status));
     const email = (await response.json()) as string | null;
     const next: AuthState = {
@@ -117,10 +121,8 @@ export function useAuth(): AuthState {
 export function usePasswordAuth() {
   return useCallback(async (mode: AuthMode, email: string, password: string) => {
     try {
-      const response = await fetch(`/api/auth/${mode === "signUp" ? "signup" : "signin"}`, {
+      const response = await apiFetch(`/auth/${mode === "signUp" ? "signup" : "signin"}`, {
         method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
@@ -147,7 +149,7 @@ export function usePasswordAuth() {
 export function useSignOut() {
   return useCallback(async () => {
     try {
-      await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" });
+      await apiFetch("/auth/signout", { method: "POST" });
     } catch {
       // Signing out locally is still the right thing to do: the cookie is the
       // server's to clear, but the UI should not get stuck signed in.

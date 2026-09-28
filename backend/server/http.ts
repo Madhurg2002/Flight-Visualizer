@@ -114,20 +114,38 @@ export const SESSION_COOKIE = "skytrace_session";
 /** 30 days, sliding: every sign-in that uses the cookie extends it. */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-export function sessionCookie(token: string, secure: boolean): string {
+/**
+ * The session cookie.
+ *
+ * `Lax` in the single-origin case, which is the tighter setting: the cookie is
+ * not attached to a request initiated by another site.
+ *
+ * `None` when a cross-origin frontend is configured, because `Lax` is *never*
+ * sent on a cross-site request — which would mean sign-in appearing to succeed
+ * and then every later request coming back anonymous. `None` obliges `Secure`,
+ * so this can only ever be used over HTTPS, which is a property worth having
+ * rather than a restriction.
+ */
+export function sessionCookie(token: string, secure: boolean, crossOrigin: boolean): string {
   const attrs = [
     `${SESSION_COOKIE}=${token}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    crossOrigin ? "SameSite=None" : "SameSite=Lax",
     `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   ];
-  if (secure) attrs.push("Secure");
+  if (secure || crossOrigin) attrs.push("Secure");
   return attrs.join("; ");
 }
 
-export function clearedSessionCookie(secure: boolean): string {
-  const attrs = [`${SESSION_COOKIE}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
-  if (secure) attrs.push("Secure");
+export function clearedSessionCookie(secure: boolean, crossOrigin: boolean): string {
+  const attrs = [
+    `${SESSION_COOKIE}=`,
+    "Path=/",
+    "HttpOnly",
+    crossOrigin ? "SameSite=None" : "SameSite=Lax",
+    "Max-Age=0",
+  ];
+  if (secure || crossOrigin) attrs.push("Secure");
   return attrs.join("; ");
 }
