@@ -150,9 +150,18 @@ const client = new PGlite();
 const db = drizzle(client, { schema });
 setDbOverride(db);
 
-await client.exec(enumSql());
-for (const table of TABLES) await client.exec(tableSql(table));
-await client.exec(indexSql());
+/** Build the whole schema. Re-runnable, so a check can drop it and restore it. */
+async function createSchema(): Promise<void> {
+  try {
+    await client.exec(enumSql());
+  } catch {
+    // The enum type outlives a table drop, so on a rebuild it is already there.
+  }
+  for (const table of TABLES) await client.exec(tableSql(table));
+  await client.exec(indexSql());
+}
+
+await createSchema();
 
 /** A caller that remembers its session cookie, like a browser would. */
 function makeClient() {
@@ -821,6 +830,64 @@ console.log("database failures");
   check("a numeric code is still found", diagnoseDatabaseError({ code: 42, message: "relation \"x\" does not exist" }) !== null);
   check("an unrelated error is not guessed at", diagnoseDatabaseError(new Error("kaboom")) === null);
   check("a non-error is not guessed at", diagnoseDatabaseError(null) === null);
+
+  // The shapes that actually arrive. Drizzle wraps every failed query, and the
+  // wrapper's own message is only the SQL, so the state is always on `.cause`
+  // and never at the top level. The cases above all put the code at the top
+  // level, which is why they passed while every real failure was a bare 500.
+  const wrapped: [string, unknown, string][] = [
+    [
+      "drizzle wrapping a missing table",
+      { message: 'Failed query: select "id" from "users"', cause: { code: "42P01", message: 'relation "users" does not exist' } },
+      "db:push",
+    ],
+    [
+      "pg's originalError wrapper",
+      { message: "write failed", originalError: { code: "28P01", message: "password authentication failed" } },
+      "password",
+    ],
+    [
+      "a wrapper around a wrapper",
+      { message: "Failed query: select 1", cause: { message: "wrapped", cause: { code: "42P01", message: 'relation "flights" does not exist' } } },
+      "db:push",
+    ],
+    [
+      "a wrapper with no code anywhere, only the reason",
+      { message: "Failed query: select 1", cause: { message: 'relation "trips" does not exist' } },
+      "db:push",
+    ],
+  ];
+
+  for (const [name, error, expect] of wrapped) {
+    const diagnosis = diagnoseDatabaseError(error);
+    check(`looks through a wrapper: ${name}`, diagnosis !== null);
+    check(`  and still says what to do: ${name}`, (diagnosis?.remedy ?? "").includes(expect), diagnosis?.remedy);
+  }
+
+  // The end-to-end version of the same bug, against a real Postgres with no
+  // tables in it — the state a freshly provisioned database is in, which is
+  // what a sign-up hits the moment it is deployed against one.
+  {
+    await client.exec('DROP TABLE IF EXISTS "flights", "trips", "sessions", "users" CASCADE;');
+    const signup = await makeClient().call("POST", "/api/auth/signup", {
+      email: "empty@example.com",
+      password: "a-good-password",
+    });
+
+    equal("a database with no tables is not a 500", signup.status, 503);
+    check(
+      "  and the error names the fix",
+      String((signup.body as { error?: string } | undefined)?.error ?? "").includes("db:push"),
+      signup.body,
+    );
+
+    await createSchema();
+    const recovered = await makeClient().call("POST", "/api/auth/signup", {
+      email: "empty@example.com",
+      password: "a-good-password",
+    });
+    equal("and the checks after it still work", recovered.status, 200);
+  }
 }
 
 /* ------------------------------------------------------------------ wrap up */

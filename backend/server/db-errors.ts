@@ -14,32 +14,53 @@
  */
 
 /** An error carrying a Postgres SQLSTATE, whichever driver produced it. */
-type CodedError = { code?: unknown; message?: unknown };
+type CodedError = { code?: unknown; message?: unknown; cause?: unknown; originalError?: unknown };
+
+/**
+ * Every error in the chain, nearest first.
+ *
+ * This is the part that is easy to get wrong. Drizzle wraps *every* failed
+ * query in a `DrizzleQueryError` whose own message is only
+ * `Failed query: <sql>` — the SQLSTATE and the real reason are on `.cause`.
+ * Looking at the top-level error therefore never matches anything, and every
+ * database problem looks like a generic 500.
+ */
+function chainOf(error: unknown, depth = 4): CodedError[] {
+  const out: CodedError[] = [];
+  let current: unknown = error;
+  for (let i = 0; i < depth && typeof current === "object" && current !== null; i += 1) {
+    const level = current as CodedError;
+    out.push(level);
+    current = level.cause ?? level.originalError;
+  }
+  return out;
+}
 
 function sqlStateOf(error: unknown): string {
-  if (typeof error !== "object" || error === null) return "";
-  const { code, message } = error as CodedError;
+  for (const level of chainOf(error)) {
+    const { code, message } = level;
 
-  // Drivers disagree: some put the state on `.code`, some wrap it in the
-  // message, and some report a number.
-  if (typeof code === "string") {
-    const trimmed = code.trim();
-    if (/^[0-9A-Z]{5}$/.test(trimmed)) return trimmed;
-    const found = /([0-9][0-9A-Z]{4})/.exec(trimmed);
-    if (found?.[1]) return found[1];
-  }
-  if (typeof message === "string") {
-    const found = /\b([0-9][0-9A-Z]{4})\b/.exec(message);
-    if (found?.[1]) return found[1];
+    // Drivers disagree: some put the state on `.code`, some wrap it in the
+    // message, and some report a number.
+    if (typeof code === "string") {
+      const trimmed = code.trim();
+      if (/^[0-9A-Z]{5}$/.test(trimmed)) return trimmed;
+      const found = /([0-9][0-9A-Z]{4})/.exec(trimmed);
+      if (found?.[1]) return found[1];
+    }
+    if (typeof message === "string") {
+      const found = /\b([0-9][0-9A-Z]{4})\b/.exec(message);
+      if (found?.[1]) return found[1];
+    }
   }
   return "";
 }
 
 function messageOf(error: unknown): string {
-  if (typeof error === "object" && error !== null && typeof (error as CodedError).message === "string") {
-    return (error as CodedError).message as string;
-  }
-  return "";
+  // The whole chain, joined: the useful text may be on the wrapper or the cause.
+  return chainOf(error)
+    .map((level) => (typeof level.message === "string" ? level.message : ""))
+    .join("\n");
 }
 
 export type DatabaseDiagnosis = {
