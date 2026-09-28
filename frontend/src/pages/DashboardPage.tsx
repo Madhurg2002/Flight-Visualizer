@@ -169,26 +169,25 @@ export function DashboardPage() {
         </aside>
 
         <section className="panel relative min-h-[320px] overflow-hidden">
-          {list.length > 0 ? (
-            <MapErrorBoundary onError={() => setSelectedId(null)}>
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center">
-                    <Spinner className="size-6" />
-                  </div>
-                }
-              >
-                <FlightMap
-                  flights={list}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  basemap={basemap}
-                  colorMode={colorMode}
-                  onColorModeChange={setColorMode}
-                />
-              </Suspense>
-            </MapErrorBoundary>
-          ) : (
+          <MapErrorBoundary onError={() => setSelectedId(null)}>
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center">
+                  <Spinner className="size-6" />
+                </div>
+              }
+            >
+              <FlightMap
+                flights={list}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                basemap={basemap}
+                colorMode={colorMode}
+                onColorModeChange={setColorMode}
+              />
+            </Suspense>
+          </MapErrorBoundary>
+          {list.length === 0 && (
             <EmptyMapState
               filtered={all.length > 0}
               onClearFilter={() => setTripFilter(null)}
@@ -238,9 +237,18 @@ export function DashboardPage() {
 }
 
 /**
- * Basemap switcher. Every option is free and keyless, so the choice is purely
- * about what reads best behind the arcs — dark for screenshots, light for
- * checking a coastline.
+ * What an empty log says, laid over the map rather than in place of it.
+ *
+ * This used to be an `if (list.length > 0)` branch that swapped the whole
+ * section for a ruled panel, which meant the one screen whose job is to show
+ * you the map was the one screen that never showed you a map — a new user
+ * landed on a grid and a message and no way to tell a broken map from a
+ * deliberate one. The basemap costs nothing to keep mounted, so it stays, and
+ * this is a caption on top of it: the map is the product, and the empty state
+ * should read as "nothing drawn yet" rather than "nothing here".
+ *
+ * The card is `pointer-events-none` so the map underneath stays pannable and
+ * the basemap switcher stays clickable; only the button opts back in.
  */
 function EmptyMapState({
   filtered,
@@ -250,20 +258,22 @@ function EmptyMapState({
   onClearFilter: () => void;
 }) {
   return (
-    <div className="graticule flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="grid size-12 place-items-center rounded-2xl border border-paper-300 bg-paper-100">
-        <Plane className="size-5 -rotate-45 text-chart-600" />
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
+      <div className="pointer-events-auto flex max-w-xs flex-col items-center gap-3 rounded-2xl border border-paper-300 bg-paper-50/90 px-5 py-4 text-center shadow-lg backdrop-blur-md">
+        <div className="grid size-12 place-items-center rounded-2xl border border-paper-300 bg-paper-100">
+          <Plane className="size-5 -rotate-45 text-chart-600" />
+        </div>
+        <p className="text-sm text-ink-600">
+          {filtered
+            ? "No flights in this trip yet. Add one, or clear the filter."
+            : "Nothing drawn yet. Log your first flight and it will draw itself here."}
+        </p>
+        {filtered && (
+          <Button variant="outline" size="sm" onClick={onClearFilter}>
+            Show all flights
+          </Button>
+        )}
       </div>
-      <p className="max-w-xs text-sm text-ink-600">
-        {filtered
-          ? "No flights in this trip yet. Add one, or clear the filter."
-          : "Your map is empty. Log your first flight and it will draw itself here."}
-      </p>
-      {filtered && (
-        <Button variant="outline" size="sm" onClick={onClearFilter}>
-          Show all flights
-        </Button>
-      )}
     </div>
   );
 }
