@@ -30,8 +30,19 @@ const PRODUCTION = "https://api.amadeus.com";
 /** Cached until shortly before expiry, so a lookup never races the clock. */
 let token: { value: string; expiresAt: number } | null = null;
 
+/**
+ * The token request currently in flight, if any.
+ *
+ * Concurrent lookups share one request rather than each making their own. A
+ * cold cache with three lookups open would otherwise spend three of the free
+ * tier's calls on authentication before answering any of them, and the token
+ * endpoint rate-limits far more aggressively than the data endpoints do.
+ */
+let inFlight: Promise<string | null> | null = null;
+
 export function resetTokenCache(): void {
   token = null;
+  inFlight = null;
 }
 
 function baseUrl(): string {
@@ -45,6 +56,19 @@ function isConfigured(): boolean {
 async function accessToken(): Promise<string | null> {
   if (token && token.expiresAt > Date.now() + 60_000) return token.value;
 
+  // `??=` is the dedupe: the first caller starts the request and everyone
+  // arriving while it is in flight waits on the same promise. `finally`
+  // clears it either way, so a failed attempt is retried rather than cached
+  // as a failure for the life of the process.
+  inFlight ??= requestToken()
+    .catch(() => null)
+    .finally(() => {
+      inFlight = null;
+    });
+  return inFlight;
+}
+
+async function requestToken(): Promise<string | null> {
   const id = process.env.AMADEUS_CLIENT_ID;
   const secret = process.env.AMADEUS_CLIENT_SECRET;
   if (!id || !secret) return null;
@@ -113,6 +137,21 @@ function localTime(value: unknown): string | undefined {
   return LOCAL_TIME.test(trimmed) ? trimmed.slice(0, 16) : undefined;
 }
 
+/**
+ * "Now" as a wall-clock string, for comparing against a provider's local time.
+ *
+ * A local time carries no offset, so it cannot be turned into an instant
+ * without knowing the airport's zone — which is the whole reason it is passed
+ * through untouched everywhere else. Both sides of the comparison are therefore
+ * read as wall clocks: the arrival as the airport reported it, and now in UTC.
+ * The answer is approximate by up to the offset, and always was, but it no
+ * longer depends on what timezone the host happens to run in, so a flight near
+ * midnight is classified the same on Render as on a laptop in Kathmandu.
+ */
+function nowAsLocalClock(): string {
+  return new Date().toISOString().slice(0, 16);
+}
+
 const STATUS_MAP: Record<string, FlightStatus> = {
   scheduled: "scheduled",
   onTime: "scheduled",
@@ -149,7 +188,9 @@ function toLookup(record: unknown): FlightLookup | null {
 
   const raw = strAt(record, "flightDesignator.status") ?? "Scheduled";
   const mapped = STATUS_MAP[raw];
-  const status: FlightStatus = mapped ?? (Date.parse(arrivalAt) < Date.now() ? "landed" : "unknown");
+  // Fixed-width, zero-padded `yyyy-mm-ddThh:mm`, so a string comparison is
+  // chronological and needs no parsing.
+  const status: FlightStatus = mapped ?? (arrivalAt < nowAsLocalClock() ? "landed" : "unknown");
 
   const departure: FlightLookup["departure"] = { iata: fromIata, scheduledAt: departureAt };
   const arrival: FlightLookup["arrival"] = { iata: toIata, scheduledAt: arrivalAt };

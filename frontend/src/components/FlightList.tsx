@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from "../lib/api";
-import { useMemo, useState } from "react";
 import {
   formatCabin,
   formatCo2,
@@ -7,7 +6,6 @@ import {
   formatDistance,
   formatDuration,
   formatMoney,
-  yearOf,
 } from "@skytrace/flight-core";
 import type { FlightLogWithAirports, Trip } from "@skytrace/types";
 import { Input, Select, cn } from "@skytrace/ui";
@@ -16,48 +14,35 @@ import { api } from "../lib/api";
 
 export function FlightList({
   flights,
+  total,
+  query,
+  onQueryChange,
+  year,
+  onYearChange,
+  years,
   selectedId,
   onSelect,
 }: {
+  /** Already narrowed by the page, so the map and this list always agree. */
   flights: FlightLogWithAirports[];
+  /** How many flights the filters started from, for the "3 of 12" counter. */
+  total: number;
+  query: string;
+  onQueryChange: (value: string) => void;
+  year: string;
+  onYearChange: (value: string) => void;
+  /** Years present in the current trip, so the menu never offers an empty one. */
+  years: string[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
   const removeFlight = useMutation(api.flights.remove);
   const rateFlight = useMutation(api.flights.update);
-  const [query, setQuery] = useState("");
-  const [year, setYear] = useState<string>("all");
 
-  const years = useMemo(
-    () => [...new Set(flights.map((f) => yearOf(f.flightDate)))].sort().reverse(),
-    [flights],
-  );
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return flights.filter((flight) => {
-      if (year !== "all" && yearOf(flight.flightDate) !== year) return false;
-      if (!q) return true;
-      return [
-        flight.fromIata,
-        flight.toIata,
-        flight.fromCity,
-        flight.toCity,
-        flight.fromName,
-        flight.toName,
-        flight.airlineName ?? "",
-        flight.airlineCode ?? "",
-        flight.flightNumber ?? "",
-        flight.notes ?? "",
-        flight.seat ?? "",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    });
-  }, [flights, query, year]);
-
-  if (flights.length === 0) {
+  // Guarded on `total`, not on the filtered list: filtering down to nothing is
+  // not an empty log, and telling someone they have never flown anywhere when
+  // they have eighty flights is the worst thing this component could say.
+  if (total === 0) {
     return (
       <div className="panel p-6 text-center">
         <p className="text-sm text-ink-600">No flights logged yet.</p>
@@ -75,7 +60,7 @@ export function FlightList({
           <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-ink-400" />
           <Input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Filter by city, airline, flight number…"
             aria-label="Filter flights"
             className="h-9 pl-8 text-[13px]"
@@ -83,7 +68,7 @@ export function FlightList({
         </div>
         <select
           value={year}
-          onChange={(e) => setYear(e.target.value)}
+          onChange={(e) => onYearChange(e.target.value)}
           aria-label="Filter by year"
           className="h-9 rounded-lg border border-paper-300 bg-paper-100/80 px-2 text-[13px] text-ink-900"
         >
@@ -97,11 +82,15 @@ export function FlightList({
       </div>
 
       <p className="tabular mt-2 px-1 text-[11px] text-ink-400">
-        {visible.length} of {flights.length} flights
+        {flights.length} of {total} flights
       </p>
 
+      {flights.length === 0 && (
+        <p className="mt-2 px-1 text-[11px] text-ink-400">Nothing matches that filter.</p>
+      )}
+
       <ul className="mt-2 flex-1 space-y-1.5 overflow-y-auto pr-1">
-        {visible.map((flight) => (
+        {flights.map((flight) => (
           <li key={flight.id}>
             <div
               className={cn(
