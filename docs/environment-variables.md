@@ -117,7 +117,9 @@ directly and asks before anything destructive, which is what you want for a
 database you are developing against.
 
 `bun run start` runs it for you before the server boots, so a host does not
-need a release step. Two things about that arrangement are deliberate:
+need a release step. The push lives in the backend's own `start` script, so it
+happens whichever way a host enters — `bun start` at the root or
+`cd backend && bun start`. Two things about that arrangement are deliberate:
 
 - The push is **not** fatal. A failed push prints its error into the host's
   logs and the server starts anyway, then `/api/health` reports what is

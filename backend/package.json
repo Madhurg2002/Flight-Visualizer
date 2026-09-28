@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "bun --hot run server/dev.ts",
     "dev:memory": "bun run scripts/dev-memory-db.ts",
-    "start": "node server/start.ts",
+    "start": "bun run db:push; node server/start.ts",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
