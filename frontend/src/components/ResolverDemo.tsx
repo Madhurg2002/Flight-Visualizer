@@ -1,10 +1,10 @@
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/api";
 import { useState } from "react";
 import { formatDistance, formatDuration } from "@skytrace/flight-core";
 import type { MatchConfidence } from "@skytrace/types";
 import { Button, Input, cn } from "@skytrace/ui";
 import { ArrowRight, Search, Sparkles } from "lucide-react";
-import { api } from "@convex/_generated/api";
+import { api } from "../lib/api";
 import { Spinner } from "../lib/spinner";
 
 const EXAMPLES = [

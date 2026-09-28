@@ -5,23 +5,29 @@
 ```
 skytrace/
 ├── backend/                     Everything that runs on the server
-│   ├── convex/                  Convex functions (also the source of codegen)
-│   │   ├── _generated/          Convex codegen output — never edit
-│   │   ├── schema.ts            Tables and indexes
-│   │   ├── auth.ts              Convex Auth: password provider
-│   │   ├── flights.ts           List, add, update, remove, stats
-│   │   ├── resolve.ts           The resolver query (the only place routes load)
-│   │   ├── trips.ts             Trip grouping
-│   │   ├── users.ts             Current user's email
-│   │   └── http.ts              Convex Auth HTTP routes
-│   └── scripts/                 watch-packages.ts
+│   ├── db/
+│   │   ├── schema.ts            Tables, indexes and enums (Drizzle)
+│   │   ├── client.ts            The Postgres connection
+│   │   └── migrations/          SQL, when a change is reviewed before it lands
+│   ├── server/
+│   │   ├── router.ts            The routing table and error handling
+│   │   ├── http.ts              JSON, cookies, argument reading, date checking
+│   │   ├── session.ts           Who is making this request
+│   │   ├── password.ts          scrypt hashing, session tokens
+│   │   ├── dev.ts               The development server
+│   │   └── routes/              auth, flights, trips, resolve
+│   ├── scripts/                 check-api.ts, dev-memory-db.ts
+│   └── drizzle.config.ts        Migration tooling; unused at runtime
+├── api/                         The Vercel function entry point
+│   ├── [...path].ts             Every /api/* route
+│   └── adapter.ts               Node request/response ↔ fetch
 ├── frontend/                    Everything the browser runs
 │   ├── index.html
 │   ├── vite.config.ts
 │   ├── scripts/                 check-csv.ts
 │   └── src/
 │       ├── components/          Map, list, panels, globe
-│       ├── lib/                 Convex client, auth, theme, basemap registry
+│       ├── lib/                 Data client, auth, theme, basemap registry
 │       └── pages/               Landing, auth, dashboard
 └── common/                      Code both sides import
     ├── types/                   Domain types, no runtime dependencies
@@ -39,11 +45,11 @@ imports from either.
 ## The four common packages
 
 **`types`** holds the domain model — `FlightLog`, `FlightCandidate`,
-`FlightStats` — with no runtime dependencies at all, so both the Convex
-functions and the React components can import it. It is why `FlightLog` types
-its `id` as a plain `string`: the generated Convex `Id<"flights">` type does
-not exist outside the app, and a shared package must not depend on codegen.
-`FlightList` narrows it back with a single documented cast.
+`FlightStats` — with no runtime dependencies at all, so both the API routes and
+the React components can import it. It is why `FlightLog` types its `id` as a
+plain `string` and its optional fields as `T | null`: a shared package cannot
+depend on a database's generated types, and writing it this way is why the move
+from Convex to Postgres did not have to change a single one of these types.
 
 **`flight-core`** is where the interesting decisions live. Every function is
 pure and side-effect free, which is what makes the resolver testable without a
@@ -53,8 +59,8 @@ argument rather than importing it, so the same code runs in a test harness.
 **`data`** owns the generated datasets and all lookups over them: exact
 airport resolution, fuzzy airport and airline search, and the lazily-built name
 indexes the parser uses. The route table is imported only by
-`convex/resolve.ts` and is not re-exported from the entry point, so it stays out
-of the browser bundle.
+`server/routes/resolve.ts` and is not re-exported from the entry point, so it
+stays out of the browser bundle.
 
 **`ui`** is a small set of Tailwind-styled primitives with no knowledge of
 flights.
@@ -64,7 +70,7 @@ flights.
 ```
 User types "United to Tokyo in March 2025"
   │
-  ├─ useQuery(api.resolve.resolve)  ──►  convex/resolve.ts
+  ├─ useQuery(api.resolve.resolve)  ──►  /api/resolve ──►  routes/resolve.ts
   │                                     │
   │                                     ├─ parseFlightInput()      pure
   │                                     └─ resolveFlight()         pure
@@ -73,52 +79,76 @@ User types "United to Tokyo in March 2025"
   └─◄── ResolveResult: ranked candidates, each with a reason
          │
          ├─ user picks one, or corrects the form
-         └─ useMutation(api.flights.add)  ──►  convex/flights.ts
+         └─ useMutation(api.flights.add)  ──►  /api/flights/add ──►  routes/flights.ts
                                                   ├─ validates both airports exist
                                                   ├─ checks for a duplicate
                                                   └─ computes + stores distance,
                                                      duration and CO₂
   │
-  └─ reactive query api.flights.list updates the map, list and stats
+  └─ api.flights.list refetches, updating the map, list and stats together
 ```
 
-Queries are the only read path, and they are reactive — a mutation invalidates
-them and the map, the list and the stats all update together. Nothing is
-duplicated into client state.
+Queries are the only read path. They share one cache, so a mutation invalidates
+every mounted query at once and the map, the list and the stats all update
+together — they cannot disagree about what is in the log. Nothing is duplicated
+into client state.
 
 ## Decisions worth explaining
 
-### Convex runs locally, and the browser cannot reach it
+### One routing table, two runtimes
 
-A local Convex deployment binds to `127.0.0.1`, which is reachable from the
-sandbox but **not** from the user's browser, which talks to the preview server
-over HTTPS. Left alone, the frontend would be a beautiful page that could not
-query anything.
+Every route is a function from a `Request` to a `Response` — the WHATWG
+interfaces, which both target runtimes speak natively. `Bun.serve` adapts them
+directly in development; in production `api/adapter.ts` converts Node's
+`IncomingMessage`/`ServerResponse` and calls the same function.
 
-So Vite proxies `/api` and `/.well-known` through to the Convex deployment
-(`frontend/vite.config.ts`), and the app always constructs its Convex client from
-`window.location.origin`. One code path in the app, correct in both places.
+`api/adapter.ts` is the only file that knows a Node runtime exists. Adding an
+Express dependency, or a second framework for the deployed case, would have
+meant two implementations of every route and two things to keep in step. The
+routing table itself is about twenty lines of paths, which is the smallest
+amount of framework that can do the job.
 
-The preview command runs `convex dev` alongside Vite, because
-`convex dev --once` starts a local backend, pushes, and exits — leaving nothing
-listening. A third process watches the shared packages, because `convex dev`
-only watches its own functions directory and would otherwise serve stale
-resolver code after an edit in `common/flight-core`.
+### The API and the app share one origin
 
-### Convex codegen and a monorepo
+In production both are served from the same deployment, so the browser calls
+`/api/...` on its own origin and the session cookie is an ordinary same-origin
+cookie. In development the API is a separate process, so Vite proxies `/api` to
+it (`frontend/vite.config.ts`) and the client still sees one origin.
 
-Convex's bundler resolves the real path behind a workspace symlink and then
-cannot find sibling packages from there, because the packages resolve upward
-from `common/`, not from `frontend/node_modules`. The fix is to declare the
-workspace packages as dependencies of the **root** `package.json` as well, so
-`<root>/node_modules/@skytrace/*` exists. That one change is what lets the
-backend bundle `flight-core`, `data` and the 850KB route table.
+That symmetry is deliberate: the alternative — an absolute API URL baked into
+the client — is a second configuration that can be right in development and
+wrong in production, and it would need CORS. There is no API base URL in the
+client, and no environment variable controlling one.
 
-A related trap: `convex dev` watches only `backend/convex`. The interesting
-code is in `common/`, so editing the resolver produces no re-push and the
-deployment quietly serves the previous version. `backend/scripts/watch-packages.ts`
-closes the gap by touching a file in the functions directory when a package
-changes.
+### Talking to Postgres over HTTP
+
+`@neondatabase/serverless`'s `neon-http` driver speaks the Postgres protocol
+over HTTP instead of holding a TCP socket open. That is what makes the API
+deployable as a serverless function: there is no connection to keep alive, so
+a function that wakes up after an hour idle costs nothing and does not time out
+on a pooled connection. The same driver works against any Postgres, so a local
+database and a managed one are the same code.
+
+The client is built on first use rather than at import, so the process starts
+and answers `/api/health` even with no `DATABASE_URL`. See
+[environment-variables.md](environment-variables.md).
+
+### The database half is tested without a database
+
+`backend/scripts/check-api.ts` boots a Postgres inside the process (PGlite),
+builds the schema by walking `db/schema.ts`, and drives the real route handlers
+through the real HTTP entry point: sign-up, sign-in, sign-out, add, edit,
+delete, bulk import, stats, trips, ownership, and the error cases.
+
+It exists because the alternative was 600 lines of SQL and Drizzle queries that
+nothing executed until a real `DATABASE_URL` appeared — which is exactly when
+finding out that a foreign key or an enum was wrong is most expensive. It needs
+no container, no connection string and no secrets, so it runs in CI.
+
+The one seam the test needs is `setDbOverride` in `db/client.ts`, which points
+the app at a different database. It is not configurable from the environment on
+purpose: a mis-set variable must never be able to redirect where somebody's
+flight log is read from.
 
 ### Light and dark are one stylesheet, not two
 
@@ -174,10 +204,12 @@ would silently alter what the user remembers. See
 
 ### Sign-up and sign-in stay separate
 
-Convex Auth's password provider reports a wrong password and an existing
-account the same way. Falling back from sign-in to sign-up would turn "wrong
-password" into a confusing "that account already exists", so the two flows are
-explicit and errors are translated per flow.
+The sign-in handler reports a wrong password and an existing account the same
+way. Falling back from sign-in to sign-up would turn "wrong password" into a
+confusing "that account already exists", so the two flows are explicit and
+errors are translated per flow. An email that does not exist is also
+indistinguishable from a wrong password, and both take the same time, because
+the handler hashes a password even when there is no such account.
 
 ### Seeing is free, saving is not
 
@@ -217,8 +249,10 @@ the [roadmap](roadmap.md#accounts-and-infrastructure).
 | Monorepo | Bun workspaces |
 | Frontend | Vite 6, React 19, TypeScript, Tailwind CSS v4 |
 | Routing | React Router 7 |
-| Backend and database | Convex 1.46 |
-| Auth | Convex Auth (`@convex-dev/auth`) |
+| Backend | Bun / Node HTTP, no framework |
+| Database | Postgres via Drizzle ORM |
+| Hosting | Vercel Functions over [Neon](https://neon.tech) Postgres |
+| Auth | Sessions in an `HttpOnly` cookie, scrypt password hashing |
 | Map rendering | deck.gl 9 over MapLibre GL 5 |
 | Basemaps | Keyless public tiles — see [map-tiles.md](map-tiles.md) |
 | Animation | Motion (`motion/react`) |
@@ -233,7 +267,9 @@ second app.
 ## Data model
 
 ```
-users            (Convex Auth)
+users            email, passwordHash, createdAt
+                   unique index on lower(email)
+sessions         tokenHash, userId, expiresAt, createdAt
 flights          userId, airlineCode, airlineName, flightNumber, flightDate,
                  fromIata, toIata, distanceKm, durationMin, co2Kg,
                  aircraft, tailNumber, cabin, seat, costMinor, currency,
@@ -244,8 +280,8 @@ trips            userId, name, startDate, endDate, createdAt
                    indexed by (userId)
 ```
 
-`flightDate` is a `yyyy-mm-dd` string, not a timestamp, so it can never be
-shifted a day by a timezone. `costMinor` is integer minor units, so money never
-drifts. `tripId` references `trips` and `flights` references `trips` in the
+`flightDate` is a real Postgres `date` column, which Postgres returns as
+`yyyy-mm-dd` with no timezone attached, so it can never be shifted a day.
+`costMinor` is integer minor units, so money never drifts. `tripId` references `trips` and `flights` references `trips` in the
 other direction; the schema does not model the reverse link, so there is no
 circular dependency to resolve.

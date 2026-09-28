@@ -178,3 +178,45 @@ export type FlightStats = {
   /** Most-visited country, by the number of arrivals. */
   mostVisitedCountry: { country: string; arrivals: number } | null;
 };
+
+/** What happened to one line of a bulk import. */
+export type ImportStatus = "added" | "duplicate" | "unresolved" | "invalid";
+
+/**
+ * The outcome for a single pasted line.
+ *
+ * A bulk import reports per-line rather than failing the whole paste, so the
+ * preview can say exactly which line 42 was and why it did not land, while
+ * every other line still saved.
+ */
+export type ImportRowResult = {
+  /** 1-based line number in the pasted text, for pointing at the bad line. */
+  line: number;
+  text: string;
+  status: ImportStatus;
+  /** Human-readable, shown verbatim in the preview. */
+  message: string;
+  flightId: string | null;
+  fromIata: string | null;
+  toIata: string | null;
+  date: string | null;
+  airlineName: string | null;
+  distanceKm: number | null;
+};
+
+/** One row of a bulk paste: free text plus optional explicit overrides. */
+export type ImportRowInput = {
+  text: string;
+  fromIata?: string;
+  toIata?: string;
+  date?: string;
+  airlineCode?: string;
+  flightNumber?: string;
+  seat?: string;
+  aircraft?: string;
+  cabin?: Cabin;
+  costMinor?: number;
+  currency?: string;
+  rating?: number;
+  notes?: string;
+};

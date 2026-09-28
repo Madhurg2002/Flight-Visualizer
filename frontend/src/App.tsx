@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
-import { useConvexAuth } from "convex/react";
+import { useAuth } from "./lib/auth";
+import { useQueryPolling } from "./lib/api";
 import { Spinner } from "./lib/spinner";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -18,7 +19,11 @@ import { LandingPage } from "./pages/LandingPage";
  * `/auth`, which meant the map could not be seen at all without an account.
  */
 function Dashboard() {
-  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { isLoading, isAuthenticated } = useAuth();
+
+  // Replaces the push updates Convex used to send: while any query is mounted,
+  // the shared cache revalidates on an interval so a second tab converges.
+  useQueryPolling();
 
   if (isLoading) {
     return (

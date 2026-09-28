@@ -1,15 +1,14 @@
 {
   // The root config exists so one `bun run typecheck` from the root covers the
   // whole repo. The shared packages have no tsconfig of their own: they are
-  // consumed as TypeScript source through the `paths` below, exactly as Vite and
-  // the Convex bundler resolve them, so they are included here rather than built.
+  // consumed as TypeScript source through the `paths` below, exactly as Vite
+  // and the API server resolve them, so they are included here rather than built.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "types": ["bun"],
+    "types": ["bun", "node"],
     "paths": {
       "@/*": ["./frontend/src/*"],
-      "@convex/*": ["./backend/convex/*"],
       "@skytrace/types": ["./common/types/src/index.ts"],
       "@skytrace/data": ["./common/data/src/index.ts"],
       "@skytrace/data/routes.generated": ["./common/data/src/routes.generated.ts"],
@@ -23,7 +22,8 @@
     "common/*/scripts",
     "frontend/src",
     "frontend/vite.config.ts",
-    "backend/convex",
-    "backend/scripts"
+    "backend/db",
+    "backend/server",
+    "api"
   ]
 }

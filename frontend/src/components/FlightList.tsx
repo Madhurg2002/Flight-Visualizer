@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "../lib/api";
 import { useMemo, useState } from "react";
 import {
   formatCabin,
@@ -12,15 +12,7 @@ import {
 import type { FlightLogWithAirports, Trip } from "@skytrace/types";
 import { Input, Select, cn } from "@skytrace/ui";
 import { Luggage, Search, Star, Trash2 } from "lucide-react";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-
-/**
- * `FlightLog.id` is a plain string in the shared types package, because that
- * package must not depend on the generated Convex data model. It is always an
- * `Id<"flights">` in practice, so narrow it once here.
- */
-const asFlightId = (id: string) => id as Id<"flights">;
+import { api } from "../lib/api";
 
 export function FlightList({
   flights,
@@ -161,7 +153,7 @@ export function FlightList({
                 <button
                   type="button"
                   aria-label={`Remove rating from ${flight.fromIata} to ${flight.toIata}`}
-                  onClick={() => rateFlight({ id: asFlightId(flight.id), rating: null })}
+                  onClick={() => rateFlight({ id: flight.id, rating: null })}
                   className="rounded p-1 text-ink-400 transition-colors hover:text-chart-600"
                 >
                   <Star className="size-3.5" />
@@ -169,7 +161,7 @@ export function FlightList({
                 <button
                   type="button"
                   aria-label={`Delete ${flight.fromIata} to ${flight.toIata}`}
-                  onClick={() => removeFlight({ id: asFlightId(flight.id) })}
+                  onClick={() => removeFlight({ id: flight.id })}
                   className="rounded p-1 text-ink-400 transition-colors hover:text-rust-600"
                 >
                   <Trash2 className="size-3.5" />
@@ -220,7 +212,7 @@ export function FlightDetail({
               aria-pressed={filled}
               onClick={() =>
                 rateFlight({
-                  id: asFlightId(flight.id),
+                  id: flight.id,
                   // Clicking the current rating clears it, so there is always a
                   // way back to "unrated".
                   rating: filled && value === flight.rating ? null : value,
@@ -280,8 +272,8 @@ export function FlightDetail({
             value={flight.tripId ?? ""}
             onChange={(e) =>
               rateFlight({
-                id: asFlightId(flight.id),
-                tripId: e.target.value ? (e.target.value as Id<"trips">) : null,
+                id: flight.id,
+                tripId: e.target.value ? e.target.value : null,
               })
             }
           >

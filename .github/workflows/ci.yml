@@ -32,9 +32,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      # The two runnable harnesses: the resolver and the CSV import layer.
-      # Neither needs a backend, which is why they are the cheapest signal in
-      # the repo and the first thing to run.
+      # The runnable harnesses: the resolver, the CSV import layer, and the API.
+      # The API one boots a Postgres inside the runner, so the database half of
+      # the project is covered without a server or a connection string.
       - name: Check
         run: bun run check
 

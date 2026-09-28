@@ -6,8 +6,8 @@
  * it has to survive whatever a person actually types. This prints the parse
  * and the top candidate for each case so regressions are visible at a glance.
  */
-import { routeRows } from "../../data/src/routes.generated";
-import { parseFlightInput, resolveFlight } from "../src/server";
+import { routeRows } from "../../data/src/routes.generated.ts";
+import { parseFlightInput, resolveFlight } from "../src/server.ts";
 
 const CASES = [
   "United to Tokyo in March 2025",

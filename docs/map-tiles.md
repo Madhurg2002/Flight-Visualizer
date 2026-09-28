@@ -42,7 +42,7 @@ Worth knowing about if the built-in set ever stops being enough.
 | **Natural Earth / self-hosted tiles** | Public domain | Maximum control; requires generating vector tiles as a build step |
 
 If you need a provider that does require a key, the honest place to put it is a
-Convex action or an environment variable — not the browser bundle. That is the
+API route or an environment variable — not the browser bundle. That is the
 same pattern the flight-API integration is designed around.
 
 ## Attribution

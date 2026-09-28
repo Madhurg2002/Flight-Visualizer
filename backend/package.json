@@ -3,16 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
   "scripts": {
-    "dev": "convex dev",
-    "dev:once": "convex dev --once",
-    "watch:packages": "bun run scripts/watch-packages.ts",
-    "codegen": "convex codegen",
-    "convex": "convex"
+    "dev": "bun --hot run server/dev.ts",
+    "dev:memory": "bun run scripts/dev-memory-db.ts",
+    "start": "node server/start.ts",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@auth/core": "^0.41.1",
-    "@convex-dev/auth": "^0.0.95",
-    "convex": "^1.46.0"
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "drizzle-kit": "^0.31.11"
   }
 }

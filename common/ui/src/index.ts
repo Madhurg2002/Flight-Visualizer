@@ -1,3 +1,3 @@
-export * from "./button";
-export * from "./input";
-export * from "./utils";
+export * from "./button.tsx";
+export * from "./input.tsx";
+export * from "./utils.ts";

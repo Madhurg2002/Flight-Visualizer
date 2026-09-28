@@ -1,8 +1,8 @@
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/api";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn, Input } from "@skytrace/ui";
 import { Loader, Plane } from "lucide-react";
-import { api } from "@convex/_generated/api";
+import { api } from "../lib/api";
 
 /**
  * Airport autocomplete.

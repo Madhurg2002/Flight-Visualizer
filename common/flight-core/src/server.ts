@@ -5,5 +5,5 @@
  * browser does not pull `@skytrace/data` — and its 1.9MB of airport and
  * airline records — into the client bundle.
  */
-export * from "./parse";
-export * from "./resolve";
+export * from "./parse.ts";
+export * from "./resolve.ts";

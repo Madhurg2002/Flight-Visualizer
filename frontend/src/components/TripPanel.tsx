@@ -1,9 +1,8 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "../lib/api";
 import { useState } from "react";
 import { Button, Input, cn } from "@skytrace/ui";
 import { Luggage, Plus, Trash2 } from "lucide-react";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import { api } from "../lib/api";
 import { formatDate, todayIso } from "@skytrace/flight-core";
 
 /**
@@ -152,7 +151,7 @@ export function TripPanel({
                   aria-label={`Delete trip ${trip.name}`}
                   title={`${formatDate(trip.startDate)}${trip.endDate ? ` – ${formatDate(trip.endDate)}` : ""}`}
                   onClick={() => {
-                    void removeTrip({ id: trip.id as Id<"trips"> });
+                    void removeTrip({ id: trip.id });
                     if (active) onFilterChange(null);
                   }}
                   className="rounded p-1 text-ink-400 opacity-0 transition-all hover:text-rust-600 focus-visible:opacity-100 group-hover:opacity-100"

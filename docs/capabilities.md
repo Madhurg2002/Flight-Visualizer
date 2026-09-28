@@ -115,7 +115,7 @@ means adding a real-time flight API; see [roadmap.md](roadmap.md).
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Email and password sign-up / sign-in | **Shipped** | Convex Auth, no email verification required to start |
+| Email and password sign-up / sign-in | **Shipped** | Sessions in an HttpOnly cookie, no email verification required to start |
 | Session persistence | **Shipped** | — |
 | Browse without an account | **Shipped** | The dashboard opens signed out over a sample log — the map, arcs, playback and colouring all work |
 | Saving requires an account | **Shipped** | Sign-in is asked for at the point of saving, and `returnTo` puts you back where you were |

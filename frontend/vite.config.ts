@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -8,38 +7,16 @@ const pkg = (name: string, file = "index.ts") =>
   fileURLToPath(new URL(`../common/${name}/src/${file}`, import.meta.url));
 
 /**
- * Where the Convex backend lives, as seen from the sandbox.
+ * Where the API runs in development.
  *
- * A local `convex dev` deployment only binds to 127.0.0.1, which is reachable
- * from the terminal but *not* from the user's browser — the browser talks to
- * the preview over HTTPS. So in development we proxy Convex's own paths through
- * the Vite server and point the browser at the page origin instead. That keeps
- * one code path in the app: it always connects to `window.location.origin`.
- *
- * The address itself belongs to the backend: `convex dev` picks a port, writes
- * it to the backend's own env file and keeps it in step. Reading that file
- * first means the two halves cannot drift apart — the classic failure being a
- * proxy aimed at a deployment that no longer exists, which looks exactly like
- * a broken backend. There is no such file in a deployed build, so hosting
- * falls through to the environment it provides.
+ * The API is a separate process (`backend/server/dev.ts`) listening on its own
+ * port, but the browser is only ever told about the page origin: the app calls
+ * `/api/...` and the Vite dev server forwards it here. That is the same shape
+ * as production, where a single origin serves the built app and the API
+ * together, so the client has one code path and there is no
+ * environment-specific base URL to get wrong.
  */
-function readBackendEnv(key: string): string | undefined {
-  const file = fileURLToPath(new URL("../backend/.env.local", import.meta.url));
-  if (!existsSync(file)) return undefined;
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.+?)\s*$/.exec(line);
-    if (match?.[1] === key) return match[2]!.replace(/^["']|["']$/g, "");
-  }
-  return undefined;
-}
-
-const convexBackend =
-  readBackendEnv("CONVEX_URL") ?? process.env.CONVEX_URL ?? "http://127.0.0.1:3210";
-
-const convexProxy = {
-  "/api": { target: convexBackend, changeOrigin: true, ws: true },
-  "/.well-known": { target: convexBackend, changeOrigin: true, ws: true },
-};
+const apiTarget = process.env.API_ORIGIN ?? `http://127.0.0.1:${process.env.API_PORT ?? 3210}`;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -68,7 +45,6 @@ export default defineConfig({
       { find: /^@skytrace\/types$/, replacement: pkg("types") },
       { find: /^@skytrace\/ui$/, replacement: pkg("ui") },
       { find: /^@\//, replacement: fileURLToPath(new URL("./src/", import.meta.url)) },
-      { find: /^@convex\//, replacement: fileURLToPath(new URL("../backend/convex/", import.meta.url)) },
     ],
   },
   server: {
@@ -76,8 +52,10 @@ export default defineConfig({
     // is reachable. HMR stays off — the platform reloads on its own schedule.
     host: "0.0.0.0",
     hmr: false,
-    proxy: convexProxy,
-    // The shared packages and the backend both live above the app root.
+    proxy: {
+      "/api": { target: apiTarget, changeOrigin: true },
+    },
+    // The shared packages and the API both live above the app root.
     fs: { allow: [fileURLToPath(new URL("..", import.meta.url))] },
   },
 });

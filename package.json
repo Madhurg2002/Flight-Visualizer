@@ -11,14 +11,16 @@
   "scripts": {
     "dev": "bun run --cwd frontend dev:all",
     "web": "bun run --cwd frontend dev",
-    "backend": "bun run --cwd backend dev",
+    "api": "bun run --cwd backend dev",
     "build": "bun run --cwd frontend build",
     "typecheck": "tsc -b --noEmit",
     "data:build": "bun run common/data/scripts/build-data.ts",
     "check:resolver": "bun run common/flight-core/scripts/parse-check.ts",
     "check:csv": "bun run frontend/scripts/check-csv.ts",
-    "check": "bun run check:resolver && bun run check:csv",
-    "convex": "bun run --cwd backend convex"
+    "check:api": "bun run --cwd backend scripts/check-api.ts",
+    "check": "bun run check:resolver && bun run check:csv && bun run check:api",
+    "db:push": "bun run --cwd backend db:push",
+    "db:generate": "bun run --cwd backend db:generate"
   },
   "dependencies": {
     "@skytrace/data": "workspace:*",
@@ -27,7 +29,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "convex": "^1.46.0",
+    "@types/node": "^26.6.3",
     "typescript": "^5.7.3"
   }
 }

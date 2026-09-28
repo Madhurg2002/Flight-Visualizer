@@ -77,7 +77,7 @@ thing that needs updating.
 ### The route table never reaches the browser
 
 `routes.generated.ts` is about 850KB as source, and 220KB once gzipped over the
-wire. It is imported by exactly one Convex function, `convex/resolve.ts`, and is
+wire. It is imported by exactly one API route, `server/routes/resolve.ts`, and is
 deliberately **not** re-exported from `common/data/src/index.ts`. Importing the
 package entry point therefore cannot pull it into the browser bundle, which is
 why the airports and airlines can be shared freely.
@@ -105,9 +105,9 @@ quietly show a different distance than the one the user remembers. Snapping the
 values at write time means a log entry stays true to itself forever.
 
 The consequence is that changing the geometry or emissions code only affects
-newly logged flights. That is the correct trade — see the `add` mutation in
-`backend/convex/flights.ts`, which calls the shared helpers server-side and
-writes the result.
+newly logged flights. That is the correct trade — see `addFlight` in
+`backend/server/routes/flights.ts`, which calls the shared helpers server-side
+and writes the result.
 
 ## Anything we could not get for free
 

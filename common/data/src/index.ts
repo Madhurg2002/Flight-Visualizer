@@ -5,8 +5,8 @@
  * needed by the backend resolver, so importing from the package index keeps it
  * out of the browser bundle.
  */
-import { airports, type Airport } from "./airports.generated";
-import { airlines, type Airline } from "./airlines.generated";
+import { airports, type Airport } from "./airports.generated.ts";
+import { airlines, type Airline } from "./airlines.generated.ts";
 
 export type { Airport, Airline };
 export { airports, airlines };

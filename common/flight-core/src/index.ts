@@ -9,6 +9,6 @@
  *
  * Backend code that needs the resolver should import `@skytrace/flight-core/server`.
  */
-export * from "./emissions";
-export * from "./format";
-export * from "./geo";
+export * from "./emissions.ts";
+export * from "./format.ts";
+export * from "./geo.ts";

@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:all": "concurrently -n backend,web,watch -c magenta,cyan,yellow \"bun run --cwd ../backend dev\" \"bun run dev\" \"bun run --cwd ../backend watch:packages\"",
+    "dev:all": "concurrently -n api,web -c magenta,cyan \"bun run --cwd ../backend dev\" \"bun run dev\"",
+    "dev:all:memory": "concurrently -n api,web -c magenta,cyan \"bun run --cwd ../backend dev:memory\" \"bun run dev\"",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "check:csv": "bun run scripts/check-csv.ts"
   },
   "dependencies": {
-    "@convex-dev/auth": "^0.0.95",
     "@deck.gl/core": "^9.4.0",
     "@deck.gl/layers": "^9.4.0",
     "@deck.gl/react": "^9.4.0",
@@ -28,7 +28,6 @@
     "@skytrace/types": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "convex": "^1.46.0",
     "deck.gl": "^9.1.0",
     "lucide-react": "^0.475.0",
     "maplibre-gl": "^5.0.0",

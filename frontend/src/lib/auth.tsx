@@ -1,54 +1,161 @@
-import { ConvexAuthProvider, useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
-import type { ReactNode } from "react";
-import { api } from "@convex/_generated/api";
-import { convex } from "./convex";
+import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { invalidateQueries } from "./api";
 
-/** Wraps `ConvexReactClient` with Convex Auth so the whole tree can sign in. */
-export function AuthProvider({ children }: { children: ReactNode }) {
-  return <ConvexAuthProvider client={convex}>{children}</ConvexAuthProvider>;
-}
-
-export function useAuth() {
-  return useConvexAuth();
-}
+/**
+ * Sign-in state, replacing Convex Auth.
+ *
+ * The exports are the same ones the app already used — `useAuth`,
+ * `usePasswordAuth`, `useSignOut`, `signInHref` — so the header, the auth page
+ * and the dashboard needed no changes. What is underneath is now an ordinary
+ * session cookie: the browser holds a signed-in cookie set by the server on
+ * `/api/auth/signin`, and `/api/users/me` says who it belongs to.
+ *
+ * There is no token in JavaScript and no token in `localStorage`, so an XSS
+ * cannot read the session — the cookie is `HttpOnly` and the only thing this
+ * file can do with it is ask the server who it belongs to.
+ */
 
 export type AuthMode = "signIn" | "signUp";
 
+type AuthState = {
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  email: string | null;
+};
+
 /**
- * Run one Convex Auth `Password` flow.
+ * `AuthProvider` is kept as a component for compatibility with `main.tsx`, but
+ * it no longer has to provide anything: state lives in the hook below, keyed on
+ * a module-level value so every consumer sees the same session.
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+const listeners = new Set<() => void>();
+
+const initial: AuthState = { isLoading: true, isAuthenticated: false, email: null };
+let state: AuthState = initial;
+let loaded = false;
+
+function setState(next: AuthState): void {
+  // Replace the object rather than mutate it: `useSyncExternalStore` compares
+  // snapshots by identity, and a mutated one would never re-render.
+  state = next;
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getState(): AuthState {
+  return state;
+}
+
+async function refresh(): Promise<AuthState> {
+  try {
+    const response = await fetch("/api/users/me", { credentials: "same-origin" });
+    if (!response.ok) throw new Error(String(response.status));
+    const email = (await response.json()) as string | null;
+    const next: AuthState = {
+      isLoading: false,
+      isAuthenticated: email !== null,
+      email,
+    };
+    // Only publish a change: this runs on every sign-in, sign-out and reload,
+    // and re-rendering the tree when nothing moved is wasted work.
+    if (
+      next.isAuthenticated !== state.isAuthenticated ||
+      next.email !== state.email ||
+      next.isLoading !== state.isLoading
+    ) {
+      setState(next);
+    }
+    return state;
+  } catch {
+    // A network failure must not read as "signed out", because that would show
+    // a sign-in form to somebody who is signed in. Loading ends either way so
+    // the app is never stuck on a spinner.
+    const next: AuthState = { isLoading: false, isAuthenticated: state.isAuthenticated, email: state.email };
+    if (next.isAuthenticated !== state.isAuthenticated || state.isLoading) setState(next);
+    return state;
+  }
+}
+
+/**
+ * Who is signed in.
  *
- * Sign-up and sign-in stay separate on purpose. The provider reports a wrong
+ * `isLoading` is true only for the first check after a page load, which is what
+ * `App.tsx` uses to hold the dashboard spinner instead of flashing the guest
+ * view at somebody who turns out to be signed in.
+ */
+export function useAuth(): AuthState {
+  useEffect(() => {
+    // Asked once per page load. The result is shared through `state`, so the
+    // header, the dashboard and the auth page all settle together.
+    if (!loaded) {
+      loaded = true;
+      void refresh();
+    }
+  }, []);
+
+  return useSyncExternalStore(subscribe, getState, getState);
+}
+
+/**
+ * Run the password flow.
+ *
+ * Sign-up and sign-in stay separate on purpose. The server reports a wrong
  * password and an existing account the same way, so quietly falling back from
  * one flow to the other would turn "wrong password" into a confusing "that
  * account already exists".
  */
 export function usePasswordAuth() {
-  const { signIn } = useAuthActions();
-
-  return async (mode: AuthMode, email: string, password: string) => {
+  return useCallback(async (mode: AuthMode, email: string, password: string) => {
     try {
-      const result = await signIn("password", {
-        flow: mode,
-        email: email.trim(),
-        password,
+      const response = await fetch(`/api/auth/${mode === "signUp" ? "signup" : "signin"}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      // `signingIn` true means the flow completed without a redirect step.
-      // With the password provider there is no email-verification hop, so this
-      // is the only success signal there is.
-      if (result.signingIn) return { ok: true as const };
-      return {
-        ok: false as const,
-        error: "That did not complete. Please try again.",
-      };
-    } catch (error) {
-      return { ok: false as const, error: humaniseAuthError(error, mode) };
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        return {
+          ok: false as const,
+          error: payload?.error ?? "Something went wrong. Please try again.",
+        };
+      }
+
+      // The cookie is set by the response above. Reading the identity back
+      // republishes it to every `useAuth` caller, so the header and the
+      // dashboard switch over without a reload.
+      invalidateQueries();
+      await refresh();
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, error: "Could not reach the server. Please try again." };
     }
-  };
+  }, []);
 }
 
 export function useSignOut() {
-  const { signOut } = useAuthActions();
-  return () => signOut();
+  return useCallback(async () => {
+    try {
+      await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" });
+    } catch {
+      // Signing out locally is still the right thing to do: the cookie is the
+      // server's to clear, but the UI should not get stuck signed in.
+    }
+    invalidateQueries();
+    loaded = true;
+    setState({ isLoading: false, isAuthenticated: false, email: null });
+  }, []);
 }
 
 /**
@@ -63,24 +170,3 @@ export function useSignOut() {
 export function signInHref(path: string) {
   return `/auth?returnTo=${encodeURIComponent(path)}`;
 }
-
-function humaniseAuthError(error: unknown, mode: AuthMode): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  const isExistingAccount = /already exists|already registered|is taken/i.test(raw);
-  const isBadCredentials = /invalid.*(email|password|credentials)|password.*incorrect/i.test(raw);
-  const isWeakPassword = /password.*(8|eight|characters)/i.test(raw);
-
-  if (mode === "signUp") {
-    if (isExistingAccount) return "An account already exists for that email. Try signing in.";
-    if (isWeakPassword) return "Pick a password of at least 8 characters.";
-  }
-  if (mode === "signIn" && isBadCredentials) {
-    return "That email and password do not match an account.";
-  }
-  // Convex auth errors are prefixed with a server-generated code; the useful
-  // part is the tail after the colon.
-  const tail = raw.includes(":") ? raw.slice(raw.lastIndexOf(":") + 1).trim() : raw;
-  return tail || "Something went wrong. Please try again.";
-}
-
-export { api };

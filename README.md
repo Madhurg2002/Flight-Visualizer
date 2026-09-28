@@ -38,16 +38,16 @@ bun install
 bun run dev
 ```
 
-That starts three processes: `convex dev` on a **local** deployment, Vite bound
-to `0.0.0.0`, and a watcher that nudges the backend when a shared package
-changes. On first run Convex provisions a local deployment and writes
-`CONVEX_DEPLOYMENT`, `CONVEX_URL` and `CONVEX_SITE_URL` to `backend/.env.local`
-— expected, and it does not require a Convex account.
+That starts the API and Vite, with Vite proxying `/api` to the API. To keep a
+flight log, point `DATABASE_URL` at a Postgres database and run
+`bun run db:push` once to create the tables. To click around without any
+database at all, `bun run --cwd frontend dev:all:memory` runs the same API
+against one inside the process.
 
 | Command | What it does |
 | --- | --- |
-| `bun run dev` | Backend, frontend and the shared-package watcher |
-| `bun run check` | Both harnesses — the fastest confidence check in the repo |
+| `bun run dev` | The API and the frontend together |
+| `bun run check` | Three harnesses — the fastest confidence check in the repo |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
 | `bun run build` | Production build into `frontend/dist` |
 | `bun run data:build` | Regenerate the aviation datasets from `common/data/raw/` |
@@ -58,7 +58,8 @@ More, including troubleshooting, is in
 ## Layout
 
 ```
-backend/     Convex functions — the server, and the database
+backend/     The API: routes, sessions, and the Postgres schema
+api/         The serverless function entry point that serves those routes
 frontend/    The Vite + React app the browser runs
 common/      types, flight-core, data and ui — imported by both halves
 docs/        The documentation below
@@ -87,8 +88,9 @@ Every document is written to be read by someone who did not build it.
 
 ## Stack
 
-Bun workspaces, Vite 6, React 19, TypeScript, Tailwind CSS v4, Convex 1.46,
-Convex Auth, deck.gl 9 over MapLibre GL 5, React Router 7.
+Bun workspaces, Vite 6, React 19, TypeScript, Tailwind CSS v4, Postgres via
+Drizzle ORM over Neon's serverless driver, deck.gl 9 over MapLibre GL 5,
+React Router 7. Deployed to Vercel.
 
 ## Two things worth knowing up front
 

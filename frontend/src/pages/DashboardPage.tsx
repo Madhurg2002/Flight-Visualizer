@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/api";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, cn } from "@skytrace/ui";
@@ -13,7 +13,7 @@ import { RecordsPanel } from "../components/RecordsPanel";
 import { StatTiles, TopAirlines } from "../components/StatTiles";
 import { TripPanel } from "../components/TripPanel";
 import { Spinner } from "../lib/spinner";
-import { api } from "@convex/_generated/api";
+import { api } from "../lib/api";
 import { useSignOut } from "../lib/auth";
 import { ThemeToggle } from "../lib/theme";
 import { downloadTextFile, flightsToCsv } from "../lib/csv";

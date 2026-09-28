@@ -10,9 +10,9 @@
  */
 import { getAirline, getAirport, type Airport } from "@skytrace/data";
 import type { FlightCandidate, MatchConfidence, ResolveResult } from "@skytrace/types";
-import { co2Kg } from "./emissions";
-import { estimateDurationMin, haversineKm } from "./geo";
-import type { ParsedInput } from "./parse";
+import { co2Kg } from "./emissions.ts";
+import { estimateDurationMin, haversineKm } from "./geo.ts";
+import type { ParsedInput } from "./parse.ts";
 
 export type RouteRow = { airline: string; src: string; dest: string; count: number };
 

@@ -3,7 +3,11 @@
 ## Requirements
 
 - [Bun](https://bun.sh) 1.4 or newer
-- No API keys, no accounts, no `.env` configuration
+- No API keys and no accounts for the default setup
+
+A Postgres connection string is needed to keep a flight log. To run the app
+with none at all — everything except sign-in and saving — see
+[Running without a database](#running-without-a-database) below.
 
 ## Run it
 
@@ -12,25 +16,31 @@ bun install
 bun run dev
 ```
 
-`bun run dev` starts all three parts of the app:
+`bun run dev` starts both halves:
 
-- `convex dev` — the Convex backend on a local deployment, watching for changes
-- `vite` — the frontend on port 5173, bound to `0.0.0.0`
-- `watch-packages` — nudges the Convex watcher when a shared package changes
+- the **API** on port 3210 — routes, sessions, and Postgres
+- `vite` on port 5173, bound to `0.0.0.0`, proxying `/api` to the API
 
-On first run Convex provisions a **local** deployment and writes
-`CONVEX_DEPLOYMENT`, `CONVEX_URL` and `CONVEX_SITE_URL` into
-`backend/.env.local`. It prints something like:
+The first time you run it against a real database, create the tables:
 
-```
-Configured a local deployment for http://127.0.0.1:3212
+```bash
+bun run db:push
 ```
 
-That is expected and requires no account. It creates a local backend rather
-than connecting to Convex Cloud. Convex picks the port and records it in
-`backend/.env.local`, so treat the printed number as the truth rather than the
-`3210` fallback hardcoded in `frontend/vite.config.ts` — the fallback is only
-reached if that file is missing.
+It reads the connection string from the environment, applies the schema from
+`backend/db/schema.ts`, and asks before doing anything destructive.
+
+## Running without a database
+
+To work on the frontend with nothing set up:
+
+```bash
+bun run --cwd frontend dev:all:memory
+```
+
+That starts the same API against a Postgres running inside the process.
+Sign-up, saving, trips, import and stats all work; the data is discarded when
+the process exits, so do not put anything in it that you want to keep.
 
 ## Scripts
 
@@ -38,20 +48,18 @@ Run from the repository root.
 
 | Command | What it does |
 | --- | --- |
-| `bun run dev` | Backend, frontend and the shared-package watcher — the normal way to work |
-| `bun run web` | Frontend only, if the backend is already running |
-| `bun run backend` | Backend only |
+| `bun run dev` | API and frontend together — the normal way to work |
+| `bun run web` | Frontend only, if the API is already running |
+| `bun run api` | API only |
 | `bun run build` | Production build into `frontend/dist` |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
 | `bun run data:build` | Regenerate the aviation datasets from `common/data/raw/` |
-| `bun run check` | Run both harnesses below — the fastest confidence check in the repo |
+| `bun run check` | Run the three harnesses below — the fastest confidence check in the repo |
 | `bun run check:resolver` | Resolver harness: parse and top candidates for a spread of inputs |
 | `bun run check:csv` | 34 assertions over CSV dates, header mapping and round-tripping |
-| `bun run convex -- <cmd>` | The Convex CLI against this project |
-
-In `frontend`, `bun run dev:all` is the same as the root `dev`. In `backend`,
-`bun run dev` is the Convex watcher on its own and `bun run dev:once` pushes a
-single time and exits.
+| `bun run check:api` | 104 assertions over the real API, against an in-process Postgres |
+| `bun run db:push` | Create or update the tables from `backend/db/schema.ts` |
+| `bun run db:generate` | Write a reviewable SQL migration instead of applying it directly |
 
 ## Checking the resolver
 
@@ -61,55 +69,43 @@ The highest-risk code in the repo has a harness that needs nothing running:
 bun run check:resolver
 ```
 
-It prints the parse and the top candidates for a spread of free-text inputs.
-Add a case to the list when you change the parser — see
-[resolver.md](resolver.md#changing-the-resolver).
+It parses a spread of half-remembered inputs and prints the top candidates with
+the reason for each, so a regression in ranking is visible by reading the
+output rather than by clicking through the UI.
 
-The CSV import is the other place with fiddly edge cases — ambiguous dates,
-quoted commas, columns in a different order — so it has its own harness:
+## Checking the API
+
+`bun run check:api` boots a Postgres inside the process and drives the real
+route handlers through the real HTTP entry point — sign-up, sign-in, sign-out,
+add, edit, delete, bulk import, stats, trips, ownership, and the error cases.
+It needs no server, no connection string and no secrets, so it runs in CI.
+
+That harness is why the database half of this project is not untested code: it
+was written before a real connection string existed, and it is the reason the
+foreign keys, enums and date handling are known to be right.
+
+## Checking the dataset stayed out of the browser
+
+The aviation dataset is roughly 1.2MB of airport records that must never be
+shipped to a browser, and whether it leaks is a property of the built bundle
+rather than of the source. A refactor that adds a careless import would still
+typecheck cleanly; this is what catches it.
+
+## How the browser reaches the API
+
+The browser only ever talks to its own origin. In development Vite proxies
+`/api` to the API process; in production one deployment serves both. The
+client has no API URL to configure, and no environment variable controls one.
+
+To see what the API itself thinks:
 
 ```bash
-bun run check:csv
+curl -s localhost:3210/api/health
 ```
 
-Both are plain scripts that exit non-zero on failure, which is what lets them
-be CI steps as they are. They are not a substitute for a real test runner —
-there is no `bun test` yet; see
-[roadmap.md](roadmap.md#accounts-and-infrastructure).
-
-## Type checking
-
-```bash
-bun run typecheck
-```
-
-That is `tsc -b --noEmit` at the root, which builds the project references
-across the app and the shared packages. If the incremental cache is stale after
-editing something in `common/`, force a rebuild with
-`bunx tsc -b --noEmit --force`.
-
-## Continuous integration
-
-`.github/workflows/ci.yml` runs on every push and pull request against `main`:
-`bun install --frozen-lockfile`, typecheck, `bun run check`, and a production
-build. It finishes with an assertion that the airport dataset has not leaked
-into the client bundle, by grepping `frontend/dist/assets/*.js` for a real
-airport name.
-
-That last step is the reason CI is worth more than a green tick on its own.
-The dataset is roughly 1.2MB of airport records that must never be shipped to
-a browser, and whether it leaks is a property of the built bundle rather than
-of the source. A refactor that adds a careless import would still typecheck
-cleanly; this is what catches it.
-
-## How the browser reaches the backend
-
-A local Convex deployment binds to `127.0.0.1`, which the user's browser cannot
-reach — the browser talks to the preview server over HTTPS. Vite proxies
-`/api` and `/.well-known` through to Convex, and the app builds its Convex
-client from `window.location.origin`.
-
-So if queries fail in the browser, check the proxy rather than the app.
+`{"ok":true,"database":"configured"}` means everything is wired up.
+`"database":"missing"` means the connection string is not set, and it is the
+reason sign-in does nothing.
 
 ## Troubleshooting
 
@@ -122,51 +118,43 @@ curl -s -o /dev/null -w "%{http_code}\n" https://tiles.openfreemap.org/styles/po
 A `200` means the provider is fine and the problem is in the layer setup. See
 [map-tiles.md](map-tiles.md) for the full list.
 
-**Queries fail with "Could not find public function".** The backend has not
-pushed yet, or the path is wrong. `convex dev` prints the function list on
-startup. Note that `convex/resolve.ts` exports a query named `resolve`, so its
-path is `resolve:resolve`, not `resolve:default`.
+**Nothing can be signed in to, and nothing can be saved.** Almost always a
+missing connection string. Check `/api/health` first — the error message names
+the variable and the command to run.
 
-**"Could not resolve @skytrace/..." from Convex.** The workspace packages must
-be declared in the root `package.json` as well as the app's — Convex's bundler
-resolves upward from `common/`, not from `frontend/node_modules`. See
-[architecture.md](architecture.md#convex-codegen-and-a-monorepo).
+**"relation \"flights\" does not exist".** The schema has not been created. Run
+`bun run db:push`.
 
-**Auth errors mention a type code.** Convex Auth errors are prefixed with a
-server-generated code. The UI translates the common cases; anything unrecognised
-falls back to the message after the last colon.
+**An API request returns 500 with an unfamiliar message.** The server logs the
+real error; the client is only told something went wrong, deliberately, because
+an unexpected error's message usually contains a query or a file path. Run the
+API in the foreground and read its output.
 
-**Backend changes have no effect.** `convex dev` only watches `backend/convex`.
-The resolver actually lives in `common/flight-core`, so editing it does not
-trigger a re-push on its own. `bun run dev:all` starts a watcher that handles
-this; if you ran `bun run backend` alone, restart it after changing a package.
-
-**"A local backend is still running on port 3212."** Another Convex deployment
-is up and the new one refuses to start. This almost always means an orphaned
-`convex dev` from an earlier session is still holding the port. Find it with
-`ss -ltnp | grep 321`, then stop that process and restart. Only one local
-backend may own a deployment at a time.
-
-Note that the backend keeps its deployment details in `backend/.env.local`,
-written by `convex dev` itself. The frontend reads that file to find the proxy
-target, so the two halves cannot drift apart — but it does mean moving the
-functions directory gives you a new local deployment on a new port.
+**"Address already in use" on port 3210.** An orphaned API from an earlier
+session is still holding the port. Find it with `ss -ltnp | grep 3210`, then
+stop that process.
 
 ## Deploying
 
-The build is static (`vite build` → `frontend/dist`), which the hosting layer
-can serve. **The backend is the catch.** A local Convex deployment stores its
-data on the machine it runs on, so a production deploy needs a real Convex Cloud
-project — connect one with `bunx convex dev --configure`, which replaces the
-local deployment in `.env.local` with a cloud one and prints the values to add
-to the production environment.
+The app deploys as one unit on Vercel: `vercel.json` builds the static frontend
+and serves the API from `api/[...path].ts`, both on one origin. The database is
+[Neon](https://neon.tech) Postgres, which is serverless and scales to zero, so
+nothing is left running when the app is not.
 
-Until that is done, the deployed front end will render but will not be able to
-save a flight, and data will not survive a redeploy.
+1. Create a Neon project and copy its connection string.
+2. Push the repository to Vercel and set `DATABASE_URL` in the project's
+   environment settings.
+3. Run `bun run db:push` locally against that same connection string to create
+   the tables.
+
+That is the whole list. There is no auth provider to configure, no signing key
+to generate, and no migration step that has to run on every deploy.
 
 ## Data you cannot add
 
-There are no secrets to manage, by design. The aviation dataset is compiled
-into the repository and the basemaps are keyless. See
-[map-tiles.md](map-tiles.md) for what a future flight-API integration would
-need and where the key would live — a Convex action, not the browser bundle.
+There are almost no secrets to manage, by design. The aviation dataset is
+compiled into the repository, the basemaps are keyless, and sessions need no
+signing key. The only variable is the database connection string — see
+[environment-variables.md](environment-variables.md). A future flight-API
+integration would need a key, and it would live in the API rather than in the
+browser bundle; see [map-tiles.md](map-tiles.md).

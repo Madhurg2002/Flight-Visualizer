@@ -5,10 +5,10 @@
 Ordered roughly as it was built. Each entry says what actually landed, not
 what was attempted.
 
-- [x] **Bun-workspaces monorepo** — a `backend` folder for the Convex
-      functions, a `frontend` folder for the app, and a `common` folder holding
-      the `types`, `flight-core`, `data` and `ui` packages both sides import,
-      with a shared `tsconfig.base.json`.
+- [x] **Bun-workspaces monorepo** — a `backend` folder for the API, a
+      `frontend` folder for the app, and a `common` folder holding the `types`,
+      `flight-core`, `data` and `ui` packages both sides import, with a shared
+      `tsconfig.base.json`.
 - [x] **Aviation reference data** — 6,072 airports, 6,162 airlines and 66,933
       routes generated from the OpenFlights public dataset, with route counts
       folded in as a hub/airline size signal. Regenerable with one script.
@@ -20,9 +20,9 @@ what was attempted.
       resolve as readily as "NRT" and "LHR".
 - [x] **Resolver with confidence tiers** — ranks candidates, attaches the reason
       for each, and reports what is still missing instead of guessing.
-- [x] **Convex backend** — schema with `flights` and `trips`, Convex Auth on the
-      password provider, queries for the log and the stats, and mutations with
-      validation, ownership checks and duplicate detection.
+- [x] **Backend** — Postgres schema with `users`, `sessions`, `flights` and
+      `trips`, session-cookie auth, queries for the log and the stats, and
+      mutations with validation, ownership checks and duplicate detection.
 - [x] **Landing page** — aviation night-sky theme, orthographic globe with real
       great-circle routes, and a live resolver demo that works signed out.
 - [x] **Auth flow** — sign in and create account, with `returnTo` preserved
@@ -34,8 +34,12 @@ what was attempted.
       detection that offers rather than blocks.
 - [x] **Free keyless basemaps** — OpenFreeMap (three styles), CARTO (two) and
       Esri satellite, switchable in-app with attribution rendered on the map.
-- [x] **Monorepo-safe Convex codegen** — the backend bundles workspace packages
-      and the 850KB route table correctly.
+- [x] **Postgres on Neon, deployed to Vercel** — the API runs as a serverless
+      function and the database scales to zero, so a free deployment has no
+      idle cost and no ephemeral-storage data loss.
+- [x] **The database half is tested without a database** — `bun run check:api`
+      boots a Postgres in-process and drives the real routes, so 104 assertions
+      cover the SQL on every CI run with no connection string.
 - [x] **Rating UI** — a 1–5 star control in the flight detail panel; clicking the
       current rating clears it.
 - [x] **Bulk import** — one flight per line or a whole CSV, resolved and inserted
@@ -134,20 +138,21 @@ the notes.
 
 - [ ] **Google and GitHub sign-in** — small, but removes most sign-up friction.
 - [ ] **Password reset** — needs an outbound email provider and a key.
-- [ ] **Aviation API integration** — a Convex action that queries a provider for
+- [ ] **Aviation API integration** — an API route that queries a provider for
       an exact flight and date, with the offline resolver as the fallback so the
       app degrades gracefully when no key is configured. This is also what would
       close the one remaining resolver gap: a flight number cannot be mapped to a
       route offline, because OpenFlights has routes but not schedules.
-- [ ] **A test runner** — two runnable harnesses now run in CI (`bun run check`,
-      covering the resolver and the CSV layer), but there is no `bun test` and
-      `parse.ts` deserves real assertions before it gets more clever.
+- [ ] **A test runner** — three runnable harnesses now run in CI (`bun run
+      check`, covering the resolver, the CSV layer and the API), but there is no
+      `bun test` and `parse.ts` deserves real assertions before it gets more
+      clever.
 - [ ] **Import into the browser bundle** — the airport autocomplete runs on the
       server, which is correct, but it does mean a keystroke is a round trip.
       Worth revisiting only if it feels slow in practice; the alternative ships
       1.2MB to every visitor.
-- [ ] **A real Convex cloud deployment** — see
-      [getting-started.md](getting-started.md).
+- [x] **A real deployment** — Vercel Functions plus Neon Postgres; see
+      [getting-started.md](getting-started.md#deploying).
 
 ### The largest single piece of work left
 

@@ -1,10 +1,9 @@
-import { useMutation } from "convex/react";
+import { useMutation } from "../lib/api";
 import { useMemo, useRef, useState } from "react";
 import { Button, Textarea, cn } from "@skytrace/ui";
 import { CircleCheck, FileUp, ListPlus, TriangleAlert, Upload } from "lucide-react";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-import type { ImportRowResult } from "@convex/flights";
+import { api } from "../lib/api";
+import type { ImportRowResult } from "@skytrace/types";
 import { formatDistance } from "@skytrace/flight-core";
 import {
   downloadTextFile,
@@ -58,7 +57,7 @@ export function BulkImportPanel({
   async function runImport(rows: ParsedImportRow[]) {
     return await importBulk({
       rows,
-      ...(tripId ? { tripId: tripId as Id<"trips"> } : {}),
+      ...(tripId ? { tripId } : {}),
     });
   }
 

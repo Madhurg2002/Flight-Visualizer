@@ -1,6 +1,6 @@
-import { useMutation } from "convex/react";
+import { useMutation } from "../lib/api";
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery } from "../lib/api";
 import {
   formatCabin,
   formatDistance,
@@ -11,8 +11,7 @@ import type { Cabin, FlightCandidate, MatchConfidence, Trip } from "@skytrace/ty
 import { Button, Input, Label, Select, Textarea, cn } from "@skytrace/ui";
 import { ArrowRight, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
 import { AirportAutocomplete } from "./AirportAutocomplete";
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
+import { api } from "../lib/api";
 
 const CONFIDENCE_STYLE: Record<MatchConfidence, string> = {
   exact: "border-sky-600/40 bg-sky-600/10 text-sky-600",
@@ -109,7 +108,7 @@ export function AddFlightPanel({
       const { tripId, ...rest } = draft;
       await addFlight({
         ...rest,
-        ...(tripId ? { tripId: tripId as Id<"trips"> } : {}),
+        ...(tripId ? { tripId } : {}),
         source: submitted && draft.fromIata && draft.toIata ? "resolved" : "manual",
         allowDuplicate,
       });

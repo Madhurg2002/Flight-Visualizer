@@ -16,12 +16,12 @@ anything if the routes on it are real.
 | Structured input → ranked candidates | `common/flight-core/src/resolve.ts` |
 | Geography and emissions | `common/flight-core/src/geo.ts`, `emissions.ts` |
 | Vocabulary lookups | `common/data/src/index.ts` |
-| Convex entry point | `backend/convex/resolve.ts` |
+| API entry point | `backend/server/routes/resolve.ts` |
 | Test harness | `common/flight-core/scripts/parse-check.ts` |
 
 Both halves are pure functions. `resolveFlight` takes a parse result plus its
-dependencies and returns a `ResolveResult`. Nothing is imported from Convex or
-React, which is why the harness can run it directly.
+dependencies and returns a `ResolveResult`. Nothing is imported from the API
+layer or React, which is why the harness can run it directly.
 
 ## Parsing: n-gram lookup, not patterns
 
