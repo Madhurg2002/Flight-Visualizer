@@ -112,7 +112,7 @@ cannot find sibling packages from there, because the packages resolve upward
 from `common/`, not from `frontend/node_modules`. The fix is to declare the
 workspace packages as dependencies of the **root** `package.json` as well, so
 `<root>/node_modules/@skytrace/*` exists. That one change is what lets the
-backend bundle `flight-core`, `data` and the 680KB route table.
+backend bundle `flight-core`, `data` and the 850KB route table.
 
 A related trap: `convex dev` watches only `backend/convex`. The interesting
 code is in `common/`, so editing the resolver produces no re-push and the
@@ -154,7 +154,7 @@ eyebrow and the headline gradient — and both clear WCAG AA.
 `flight-core` exports from two files, and the split is load-bearing.
 `@skytrace/flight-core` is the browser-safe surface — formatters and geometry
 only. `@skytrace/flight-core/server` adds the parser and the resolver, which
-import `@skytrace/data` and its 1.9MB of airport and airline records.
+import `@skytrace/data` and its 2MB of airport and airline records.
 
 A single barrel re-exporting everything meant that importing `formatDistance`
 in a React component pulled the whole dataset into the client bundle. The

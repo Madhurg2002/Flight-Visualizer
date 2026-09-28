@@ -19,15 +19,18 @@ bun run dev
 - `watch-packages` — nudges the Convex watcher when a shared package changes
 
 On first run Convex provisions a **local** deployment and writes
-`CONVEX_DEPLOYMENT`, `CONVEX_URL` and `CONVEX_SITE_URL` into `.env.local`. It
-prints something like:
+`CONVEX_DEPLOYMENT`, `CONVEX_URL` and `CONVEX_SITE_URL` into
+`backend/.env.local`. It prints something like:
 
 ```
-Configured a local deployment for http://127.0.0.1:3210
+Configured a local deployment for http://127.0.0.1:3212
 ```
 
 That is expected and requires no account. It creates a local backend rather
-than connecting to Convex Cloud.
+than connecting to Convex Cloud. Convex picks the port and records it in
+`backend/.env.local`, so treat the printed number as the truth rather than the
+`3210` fallback hardcoded in `frontend/vite.config.ts` — the fallback is only
+reached if that file is missing.
 
 ## Scripts
 
@@ -43,7 +46,7 @@ Run from the repository root.
 | `bun run data:build` | Regenerate the aviation datasets from `common/data/raw/` |
 | `bun run check` | Run both harnesses below — the fastest confidence check in the repo |
 | `bun run check:resolver` | Resolver harness: parse and top candidates for a spread of inputs |
-| `bun run check:csv` | 35 assertions over CSV dates, header mapping and round-tripping |
+| `bun run check:csv` | 34 assertions over CSV dates, header mapping and round-tripping |
 | `bun run convex -- <cmd>` | The Convex CLI against this project |
 
 In `frontend`, `bun run dev:all` is the same as the root `dev`. In `backend`,
@@ -69,18 +72,35 @@ quoted commas, columns in a different order — so it has its own harness:
 bun run check:csv
 ```
 
-Both are plain scripts that exit non-zero on failure, so they drop into CI as
-they are. There is no test runner wired up yet; see
+Both are plain scripts that exit non-zero on failure, which is what lets them
+be CI steps as they are. They are not a substitute for a real test runner —
+there is no `bun test` yet; see
 [roadmap.md](roadmap.md#accounts-and-infrastructure).
 
 ## Type checking
 
 ```bash
-cd frontend && bunx tsc -b --noEmit --force
+bun run typecheck
 ```
 
-`-b` builds project references; `--force` ignores the incremental cache, which
-is worth using after editing anything in `common/`.
+That is `tsc -b --noEmit` at the root, which builds the project references
+across the app and the shared packages. If the incremental cache is stale after
+editing something in `common/`, force a rebuild with
+`bunx tsc -b --noEmit --force`.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request against `main`:
+`bun install --frozen-lockfile`, typecheck, `bun run check`, and a production
+build. It finishes with an assertion that the airport dataset has not leaked
+into the client bundle, by grepping `frontend/dist/assets/*.js` for a real
+airport name.
+
+That last step is the reason CI is worth more than a green tick on its own.
+The dataset is roughly 1.2MB of airport records that must never be shipped to
+a browser, and whether it leaks is a property of the built bundle rather than
+of the source. A refactor that adds a careless import would still typecheck
+cleanly; this is what catches it.
 
 ## How the browser reaches the backend
 

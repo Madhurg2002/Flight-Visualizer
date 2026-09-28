@@ -134,15 +134,26 @@ means adding a real-time flight API; see [roadmap.md](roadmap.md).
 | 6,162 airlines indexed | **Shipped** | — |
 | 66,933 routes indexed | **Shipped** | Backend-only; kept out of the browser bundle |
 | Resolver test harness | **Shipped** | `bun run check:resolver` |
-| CSV import/export checks | **Shipped** | `bun run check:csv` — 35 assertions over dates, header mapping and round-tripping |
-| Unit tests | **Partial** | Two runnable harnesses; no test runner or CI is wired up |
+| CSV import/export checks | **Shipped** | `bun run check:csv` — 34 assertions over dates, header mapping and round-tripping |
+| CI on every push and PR | **Shipped** | Typecheck, both harnesses, a production build, and an assertion that the airport dataset never reached the client bundle |
+| Unit tests | **Partial** | Two runnable harnesses in CI; no test runner (`bun test`) yet |
 | Offline resolver | **Shipped** | Needs no third-party API to function |
 | Aviation API hook | **Planned** | Designed, not implemented |
 | Snapshot semantics for saved flights | **Shipped** | Distance/duration/CO₂ are stored, not re-derived |
 
 ---
 
-## 7. Who built it
+## 7. Appearance
+
+| Capability | Status | Notes |
+| --- | --- | --- |
+| Light and dark themes | **Shipped** | One stylesheet, not two — the palette is CSS custom properties swapped at runtime, so every colour with an alpha modifier follows for free |
+| Theme toggle | **Shipped** | In all three headers; the choice is stored and applied before first paint, so there is no flash of the wrong theme |
+| Light/dark over a runtime switch | **Shipped** | The dark palette inverts the accent scale rather than dimming the light one, because the prominent end of each scale has to stay prominent |
+| WCAG AA contrast | **Shipped** | Both palettes checked against every surface they are used on |
+| Reduced-motion support | **Shipped** | Honours `prefers-reduced-motion` in the stylesheet and in the globe's own rotation |
+
+## 8. Who built it
 
 | Capability | Status | Notes |
 | --- | --- | --- |

@@ -70,11 +70,15 @@ thing that needs updating.
 
 ### The route table never reaches the browser
 
-`routes.generated.ts` is about 680KB. It is imported by exactly one Convex
-function, `convex/resolve.ts`, and is deliberately **not** re-exported from
-`common/data/src/index.ts`. Importing the package entry point therefore
-cannot pull it into the browser bundle, which is why the airports and airlines
-can be shared freely.
+`routes.generated.ts` is about 850KB as source, and 220KB once gzipped over the
+wire. It is imported by exactly one Convex function, `convex/resolve.ts`, and is
+deliberately **not** re-exported from `common/data/src/index.ts`. Importing the
+package entry point therefore cannot pull it into the browser bundle, which is
+why the airports and airlines can be shared freely.
+
+That is a bundle property rather than a convention, so it is asserted rather
+than trusted: CI greps the built client bundle for a real airport name and
+fails if it finds one. See [getting-started.md](getting-started.md#continuous-integration).
 
 The packed representation — one string of `AIRLINE|SRC|DEST:COUNT` records —
 is a build-time choice. The same data as an array of objects was 2.7MB.
