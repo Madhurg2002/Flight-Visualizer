@@ -15,7 +15,7 @@
  * Run alongside `convex dev` via `bun run dev:all`.
  */
 import { watch } from "node:fs";
-import { statSync, utimesSync } from "node:fs";
+import { readFileSync, statSync, utimesSync } from "node:fs";
 import { resolve } from "node:path";
 
 // This file lives in backend/scripts, so the repo root is two levels up.
@@ -72,4 +72,56 @@ for (const dir of PACKAGE_DIRS) {
 
 if (watching > 0) {
   console.log(`[watch-packages] watching ${watching} package director${watching === 1 ? "y" : "ies"}`);
+}
+
+/**
+ * Exit when the process that started us goes away.
+ *
+ * Without this, every dev-server restart leaves another watcher behind —
+ * they are cheap individually, but they accumulate until the machine is
+ * short of memory, and nothing reaps them because the preview runner only
+ * reclaims the port it owns.
+ *
+ * Checking `process.ppid` is not enough: we are started as `bun run
+ * scripts/watch-packages.ts`, and that wrapper outlives its own parent, so
+ * our immediate parent id never changes. What actually happens is that
+ * *some* ancestor exits and we are reparented. So the whole chain is
+ * recorded at startup and re-checked; if any of those processes is gone,
+ * the run is over.
+ */
+function ancestorChain(): number[] {
+  const chain: number[] = [];
+  let pid = process.pid;
+  // /proc gives the real parent even when the parent has already exited and
+  // this process has been reparented, which is exactly the case we detect.
+  for (let depth = 0; depth < 16 && pid > 1; depth++) {
+    let ppid = 0;
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+      // The comm field is parenthesised and may contain spaces, so parse from
+      // the last ')' rather than splitting the whole line.
+      ppid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
+    } catch {
+      break;
+    }
+    if (!ppid || chain.includes(ppid)) break;
+    chain.push(ppid);
+    pid = ppid;
+  }
+  return chain;
+}
+
+const startingChain = ancestorChain().join(",");
+
+if (startingChain) {
+  setInterval(() => {
+    // The shape of the chain is the signal, not any one pid: when an ancestor
+    // exits we are reparented and the chain changes. Testing for a recorded
+    // pid disappearing would miss the common case, because the short-lived
+    // process in the middle has usually exited before this script even runs.
+    if (ancestorChain().join(",") !== startingChain) {
+      console.log("[watch-packages] reparented — the run that started us has ended");
+      process.exit(0);
+    }
+  }, 2000);
 }
