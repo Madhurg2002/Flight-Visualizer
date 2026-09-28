@@ -102,6 +102,20 @@ export function AddFlightPanel({
     setError(null);
   }
 
+  /**
+   * Open the blank details form.
+   *
+   * The details form used to appear only once the resolver had returned
+   * something, which meant the panel told you to "enter the details by hand
+   * below" and then rendered nothing below. A query the resolver could not
+   * place — a bare city, a half-remembered route — left no way to type an
+   * airport at all, which is the one thing this form exists to allow.
+   */
+  function startManual() {
+    setError(null);
+    setDraft({ fromIata: "", toIata: "", flightDate: todayIso() });
+  }
+
   function runResolve(event: React.FormEvent) {
     event.preventDefault();
     if (!text.trim()) return;
@@ -161,12 +175,35 @@ export function AddFlightPanel({
         </Button>
       </form>
 
+      {/* The way in when there is nothing to describe, or when the description
+          did not land. Present from the start rather than only after a failed
+          search, so a user who knows they want to type the details does not
+          have to first type something the resolver will reject. */}
+      {!draft && (
+        <button
+          type="button"
+          onClick={startManual}
+          className="mt-2 text-[11px] text-ink-400 underline-offset-2 transition-colors hover:text-ink-600 hover:underline"
+        >
+          Enter the details by hand
+        </button>
+      )}
+
       {result && submitted !== null && !draft && (
         <div className="mt-4">
           {result.candidates.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-paper-300 p-3 text-xs text-ink-400">
-              Nothing matched “{submitted}”. Enter the details by hand below.
-            </p>
+            <div className="rounded-lg border border-dashed border-paper-300 p-3">
+              <p className="text-xs text-ink-500">
+                Nothing matched “{submitted}”.
+              </p>
+              <button
+                type="button"
+                onClick={startManual}
+                className="mt-2 text-[11px] font-medium text-chart-600 underline-offset-2 hover:underline"
+              >
+                Enter the details by hand
+              </button>
+            </div>
           ) : (
             <>
               <p className="text-[11px] text-ink-400">
