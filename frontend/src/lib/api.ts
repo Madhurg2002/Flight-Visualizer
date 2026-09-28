@@ -378,7 +378,7 @@ export function useQuery<TArgs, TResult>(
   // clears the cache; the snapshot itself is not needed here, only the change.
   useSyncExternalStore(subscribe, getRevision, getRevision);
 
-  const key = skipped ? null : `${generation} ${cacheKey(ref, concreteArgs)}`;
+  const key = skipped ? null : `${generation}\0${cacheKey(ref, concreteArgs)}`;
   const qs = skipped ? "" : queryString(concreteArgs);
   const entry = key === null ? undefined : cache.get(key);
   const data = entry?.loaded ? (entry.data as TResult) : undefined;
