@@ -277,6 +277,49 @@
     text-decoration: underline;
   }
 
+  /* The playback scrubber. The input is a full 24px tall so there is something
+     to grab on a phone; the hairline is the track drawn inside it. Styling the
+     track separately is the only way to get both, because a range input sizes
+     its own box to the track by default. */
+  .scrubber {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 24px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .scrubber::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--paper-300);
+  }
+  .scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 999px;
+    background: var(--chart-600);
+    border: 2px solid var(--paper-100);
+  }
+  .scrubber::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--paper-300);
+  }
+  .scrubber::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--chart-600);
+    border: 2px solid var(--paper-100);
+  }
+  .scrubber:focus-visible {
+    outline: 2px solid var(--chart-600);
+    outline-offset: 2px;
+  }
+
   /* A chart legend label: the small tracked-out mono caption that sits under
      a block of type and above the drawing. */
   .eyebrow {

@@ -2,11 +2,13 @@ import { useQuery } from "convex/react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, cn } from "@skytrace/ui";
-import { Download, Layers, LogOut, Plane } from "lucide-react";
+import { Download, LogOut, Plane } from "lucide-react";
 import { AddFlightPanel } from "../components/AddFlightPanel";
 import { BulkImportPanel } from "../components/BulkImportPanel";
 import { FlightDetail, FlightList } from "../components/FlightList";
 import type { BasemapId, ColorMode } from "../components/FlightMap";
+import { MapErrorBoundary } from "../components/MapErrorBoundary";
+import { BasemapPicker } from "../components/BasemapPicker";
 import { RecordsPanel } from "../components/RecordsPanel";
 import { StatTiles, TopAirlines } from "../components/StatTiles";
 import { TripPanel } from "../components/TripPanel";
@@ -14,7 +16,6 @@ import { Spinner } from "../lib/spinner";
 import { api } from "@convex/_generated/api";
 import { useSignOut } from "../lib/auth";
 import { ThemeToggle } from "../lib/theme";
-import { BASEMAPS, getBasemap } from "../lib/mapStyles";
 import { downloadTextFile, flightsToCsv } from "../lib/csv";
 
 /**
@@ -129,22 +130,24 @@ export function DashboardPage() {
 
         <section className="panel relative min-h-[320px] overflow-hidden">
           {list.length > 0 ? (
-            <Suspense
-              fallback={
-                <div className="flex h-full items-center justify-center">
-                  <Spinner className="size-6" />
-                </div>
-              }
-            >
-              <FlightMap
-                flights={list}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                basemap={basemap}
-                colorMode={colorMode}
-                onColorModeChange={setColorMode}
-              />
-            </Suspense>
+            <MapErrorBoundary onError={() => setSelectedId(null)}>
+              <Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center">
+                    <Spinner className="size-6" />
+                  </div>
+                }
+              >
+                <FlightMap
+                  flights={list}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  basemap={basemap}
+                  colorMode={colorMode}
+                  onColorModeChange={setColorMode}
+                />
+              </Suspense>
+            </MapErrorBoundary>
           ) : (
             <EmptyMapState
               filtered={all.length > 0}
@@ -189,67 +192,6 @@ export function DashboardPage() {
  * about what reads best behind the arcs — dark for screenshots, light for
  * checking a coastline.
  */
-function BasemapPicker({
-  value,
-  onChange,
-}: {
-  value: BasemapId;
-  onChange: (id: BasemapId) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const active = getBasemap(value);
-
-  return (
-    <div className="absolute top-2 right-2 z-10">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex items-center gap-1.5 rounded-lg border border-paper-300 bg-paper-100/90 px-2.5 py-1.5 text-[11px] text-ink-700 backdrop-blur transition-colors hover:border-paper-400"
-      >
-        <Layers className="size-3.5" />
-        {active.label}
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close basemap menu"
-            className="fixed inset-0 z-0 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <ul className="absolute right-0 mt-1.5 w-64 overflow-hidden rounded-xl border border-paper-300 bg-paper-100/97 shadow-2xl backdrop-blur-xl">
-            {BASEMAPS.map((option) => (
-              <li key={option.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(option.id);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "w-full px-3 py-2.5 text-left transition-colors hover:bg-paper-200",
-                    option.id === value && "bg-paper-200",
-                  )}
-                >
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="text-[13px] font-medium text-ink-900">{option.label}</span>
-                    <span className="text-[10px] text-ink-400">{option.provider}</span>
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-400">
-                    {option.note}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-}
-
 function EmptyMapState({
   filtered,
   onClearFilter,
