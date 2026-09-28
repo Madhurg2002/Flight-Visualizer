@@ -242,7 +242,7 @@ export function AuthorSection() {
               href={AUTHOR.github}
               target="_blank"
               rel="noreferrer noopener"
-              className="group flex items-center gap-1 text-[13px] text-chart-600 transition-colors hover:text-chart-500"
+              className="group flex items-center gap-1 py-1 text-[13px] text-chart-600 transition-colors hover:text-chart-500"
             >
               All repositories on GitHub
               <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -340,7 +340,13 @@ export function AuthorCredit() {
             target="_blank"
             rel="noreferrer noopener"
             title={link.handle}
-            className="text-ink-400 transition-colors hover:text-chart-600"
+            aria-label={link.label}
+            // The icon alone is 16px, which is under the 24px WCAG 2.5.8
+            // minimum target size, and the row needs a real accessible name
+            // now that the title attribute is no longer the only label. The
+            // negative margin grows the hit area back over the old spacing,
+            // so the icons stay exactly where they were.
+            className="-m-3 flex size-10 items-center justify-center rounded-md text-ink-400 transition-colors hover:text-chart-600"
           >
             <SocialIcon href={link.href} />
           </a>
@@ -348,7 +354,8 @@ export function AuthorCredit() {
         <a
           href={AUTHOR_EMAIL.href}
           title={AUTHOR_EMAIL.handle}
-          className="text-ink-400 transition-colors hover:text-chart-600"
+          aria-label={AUTHOR_EMAIL.label}
+          className="-m-3 flex size-10 items-center justify-center rounded-md text-ink-400 transition-colors hover:text-chart-600"
         >
           <Mail className="size-4" />
         </a>

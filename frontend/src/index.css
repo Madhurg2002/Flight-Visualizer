@@ -262,6 +262,11 @@
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
+    /* 13px type lands at ~20px tall, which is under the 24px WCAG 2.5.8
+       minimum target size. These are standalone jump links rather than links
+       inside a sentence, so the inline exemption does not apply. Padding
+       takes the hit area past the threshold without changing the type size. */
+    padding-block: 3px;
     font-size: 13px;
     color: var(--ink-500);
     text-underline-offset: 4px;

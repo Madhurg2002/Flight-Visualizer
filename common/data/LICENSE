@@ -1,0 +1,20 @@
+The aviation data in this package — `raw/` and the `*.generated.ts` files
+compiled from it — comes from the OpenFlights dataset:
+
+    https://github.com/jpatokal/openflights
+
+It is licensed under the Open Database License (ODbL) v1.0:
+
+    https://opendatacommons.org/licenses/odbl/
+
+This is NOT covered by the repository's MIT licence, which applies to the
+application code. The ODbL is share-alike: if you redistribute these files, or
+a derived database built from them, you must keep them under the ODbL and carry
+the attribution.
+
+Attribution: airport, airline and route data from OpenFlights
+(https://github.com/jpatokal/openflights), derived from OpenStreetMap
+(https://www.openstreetmap.org/copyright) and various government and
+commercial sources.
+
+Regenerate with `bun run data:build` from the repository root.
