@@ -39,15 +39,16 @@ bun run dev
 ```
 
 That starts the API and Vite, with Vite proxying `/api` to the API. To keep a
-flight log, point `DATABASE_URL` at a Postgres database and run
-`bun run db:push` once to create the tables. To click around without any
-database at all, `bun run --cwd frontend dev:all:memory` runs the same API
-against one inside the process.
+flight log, point `DATABASE_URL` at a Postgres database; `bun run db:push`
+creates the tables, and `bun run start` does it for you before the server
+binds its port. To click around without any database at all,
+`bun run --cwd frontend dev:all:memory` runs the same API against one inside
+the process.
 
 | Command | What it does |
 | --- | --- |
 | `bun run dev` | The API and the frontend together |
-| `bun run start` | The production API alone, the way a host runs it |
+| `bun run start` | The production API, applying the schema first |
 | `bun run check` | Three harnesses — the fastest confidence check in the repo |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
 | `bun run build` | Production build into `frontend/dist` |

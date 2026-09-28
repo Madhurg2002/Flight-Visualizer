@@ -164,11 +164,10 @@ nothing is left running when the app is not.
 1. Create a Neon project and copy its connection string.
 2. Push the repository to Vercel and set `DATABASE_URL` in the project's
    environment settings.
-3. Run `bun run db:push` locally against that same connection string to create
-   the tables.
 
 That is the whole list. There is no auth provider to configure, no signing key
-to generate, and no migration step that has to run on every deploy.
+to generate, and no migration step that has to run on every deploy: `start`
+applies the schema itself before the server binds its port.
 
 ### One project setting that is easy to get wrong
 

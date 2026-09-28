@@ -116,6 +116,22 @@ bun run db:push
 directly and asks before anything destructive, which is what you want for a
 database you are developing against.
 
+`bun run start` runs it for you before the server boots, so a host does not
+need a release step. Two things about that arrangement are deliberate:
+
+- The push is **not** fatal. A failed push prints its error into the host's
+  logs and the server starts anyway, then `/api/health` reports what is
+  actually wrong. A container that refuses to boot instead leaves nothing to
+  diagnose, and on a free tier the restarts are slow.
+- It is **not** destructive. `--force` is not passed, so a statement that would
+  truncate a table is refused rather than applied to a flight log. In a
+  non-interactive deploy drizzle-kit applies the additive changes and stops at
+  anything that needs a human.
+
+`drizzle-kit` is a devDependency, so the install has to include dev
+dependencies — `bun install` does by default, and a host configured for
+`--production` does not.
+
 `bun run db:generate` writes a SQL migration file under `backend/db/migrations`
 instead, for when you want the change reviewed in a diff before it reaches a
 shared database. Neither is needed at runtime: the running API never loads
