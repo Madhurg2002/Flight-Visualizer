@@ -138,7 +138,7 @@ means adding a real-time flight API; see [roadmap.md](roadmap.md).
 | CSV import/export checks | **Shipped** | `bun run check:csv` — 34 assertions over dates, header mapping and round-tripping |
 | CI on every push and PR | **Shipped** | Typecheck, both harnesses, a production build, and an assertion that the airport dataset never reached the client bundle |
 | Unit tests | **Partial** | Two assertion harnesses in CI plus a resolver harness you read by eye; no test runner (`bun test`) yet |
-| API tested against a real Postgres | **Shipped** | `bun run check:api` drives the real routes in-process, 187 assertions |
+| API tested against a real Postgres | **Shipped** | `bun run check:api` drives the real routes in-process, 193 assertions |
 | Schema applied on boot | **Shipped** | `start` runs `db:push` first, so a deploy has no release step |
 | Demo data on boot | **Shipped** | `start` seeds a demo account with real derived figures, when `SEED_DEMO_PASSWORD` is set; idempotent, never touches a real log |
 | Split deployment | **Shipped** | Frontend, API and database on three hosts; two environment variables |

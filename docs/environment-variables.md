@@ -183,6 +183,14 @@ happens whichever way a host enters — `bun start` at the root or
   non-interactive deploy drizzle-kit applies the additive changes and stops at
   anything that needs a human.
 
+One setting in `backend/drizzle.config.ts` decides whether the first of those
+two is true at all: `strict`. Left `true` it means "ask before applying",
+unconditionally — so on a host, which has no terminal, the push builds the
+whole schema, prints every `CREATE TABLE`, and then dies with `Interactive
+prompts require a TTY terminal` having applied nothing. It is `false` here, and
+`bun run check:api` asserts that, because the failure is invisible from
+outside: the log looks like a deploy in progress and the database stays empty.
+
 `drizzle-kit` is a devDependency, so the install has to include dev
 dependencies — `bun install` does by default, and a host configured for
 `--production` does not.

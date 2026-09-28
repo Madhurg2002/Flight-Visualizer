@@ -856,6 +856,31 @@ console.log("demo data");
   equal("  and writes nothing while refusing", (await db.select().from(schema.users).where(eq(schema.users.email, "short@seeded.test"))).length, 0);
 }
 
+console.log("boot wiring");
+{
+  // Two settings that decide whether a deployment applies its own schema, and
+  // both have failed on a real host while every functional test still passed.
+  // They are checked here by reading the files, because neither is observable
+  // from the API: a `start` that quietly skips the push, or a push that stops
+  // to ask a question nobody is there to answer, looks identical to "still
+  // deploying" from outside.
+  const { readFileSync } = await import("node:fs");
+
+  const root = new URL("../..", import.meta.url);
+  const start = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
+  const backendPkg = JSON.parse(readFileSync(new URL("backend/package.json", root), "utf8"));
+
+  check("the root start script delegates to the backend", start.scripts.start.includes("backend"));
+  check("the backend start applies the schema", backendPkg.scripts.start.includes("db:push"));
+  check("and seeds before serving", backendPkg.scripts.start.indexOf("seed-demo") > 0);
+  check("neither step can stop the server booting", backendPkg.scripts.start.includes("; node server/start.ts"));
+
+  // `strict: true` means "always ask". A host has no terminal to ask on.
+  const config = readFileSync(new URL("backend/drizzle.config.ts", root), "utf8");
+  check("drizzle does not stop to ask for confirmation", !/strict:\s*true/.test(config));
+  check("and never passes --force, which would truncate a flight log", !/push[^\n]*--force/.test(backendPkg.scripts["db:push"] ?? ""));
+}
+
 console.log("database failures");
 {
   // The point of this section: a database that is configured but unusable is
