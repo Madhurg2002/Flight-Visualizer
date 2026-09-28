@@ -76,6 +76,7 @@ Every document is written to be read by someone who did not build it.
 | Document | What it answers |
 | --- | --- |
 | [getting-started.md](docs/getting-started.md) | Running it locally, the scripts, and troubleshooting |
+| [environment-variables.md](docs/environment-variables.md) | Every environment variable, what it is for, and what breaks without it |
 | [capabilities.md](docs/capabilities.md) | What the app can actually do today, feature by feature |
 | [resolver.md](docs/resolver.md) | How "United to Tokyo in March" becomes a specific flight |
 | [architecture.md](docs/architecture.md) | How the monorepo is laid out, and why |

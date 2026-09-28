@@ -1,9 +1,7 @@
 import { ConvexAuthProvider, useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import { convex } from "./convex";
-import { Spinner } from "./spinner";
 
 /** Wraps `ConvexReactClient` with Convex Auth so the whole tree can sign in. */
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -54,29 +52,16 @@ export function useSignOut() {
 }
 
 /**
- * Gates a route behind sign-in.
+ * Carries the intended destination across the sign-in redirect.
  *
- * The requested path is carried across to `/auth` as `returnTo` so signing in
- * lands the user back where they were going instead of on the landing page.
+ * The dashboard is reachable signed out — a visitor can see the map over a
+ * sample log — so signing in is asked for at the point of saving rather than
+ * on arrival. When it is asked for, `returnTo` goes in the query string and
+ * `/auth` navigates there afterwards, so the user lands back where they were
+ * rather than on the landing page.
  */
-export function RequireAuth({ children }: { children: ReactNode }) {
-  const { isLoading, isAuthenticated } = useConvexAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-paper-50">
-        <Spinner />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    const returnTo = `${location.pathname}${location.search}`;
-    return <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />;
-  }
-
-  return <>{children}</>;
+export function signInHref(path: string) {
+  return `/auth?returnTo=${encodeURIComponent(path)}`;
 }
 
 function humaniseAuthError(error: unknown, mode: AuthMode): string {

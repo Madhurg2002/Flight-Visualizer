@@ -179,12 +179,29 @@ account the same way. Falling back from sign-in to sign-up would turn "wrong
 password" into a confusing "that account already exists", so the two flows are
 explicit and errors are translated per flow.
 
-### `RequireAuth` carries the destination
+### Seeing is free, saving is not
 
-An unauthenticated visit to `/dashboard` redirects to
-`/auth?returnTo=/dashboard`, and `/auth` navigates there after sign-in. The
-fallback is `/dashboard`, never the landing page — a signed-in user should not
-land on marketing because they followed an old link.
+`/dashboard` is not behind a route guard. A visitor with no account gets the
+map, drawn over a small sample log: the great-circle arcs, the colouring, the
+playback and the basemap switcher all work, because looking at the product is
+the part worth doing before asking for anything.
+
+What needs an account is keeping a history — logging a flight, trips, stats,
+import and export. `App.tsx` branches on `isAuthenticated` and renders
+`GuestDashboard` or `DashboardPage`; the panels that would be empty without a
+session are absent from the guest view rather than shown blank, so the page
+never implies there is a log behind it.
+
+The sample log lives in `frontend/src/lib/sampleFlights.ts` with its
+coordinates written out by hand. Importing `@skytrace/data` for twelve rows
+would put 1.2MB of airport records in the browser bundle, which is exactly what
+the CI bundle assertion exists to prevent; the real geometry helpers are
+imported instead, so the sample carries genuine distances and emissions.
+
+Sign-in is asked for at the point of saving, via `signInHref`, which puts the
+destination in the query string as `returnTo`. `/auth` navigates there
+afterwards, so the user lands back where they were rather than on the landing
+page.
 
 ### Password auth, no verification email
 

@@ -7,6 +7,7 @@ the long ones.
 | Document | What it answers |
 | --- | --- |
 | [getting-started.md](getting-started.md) | Running it locally, the scripts, CI, and troubleshooting |
+| [environment-variables.md](environment-variables.md) | Every environment variable, what it is for, and what breaks without it |
 | [capabilities.md](capabilities.md) | What the app can actually do today, feature by feature |
 | [roadmap.md](roadmap.md) | What is finished, what is in progress, what is not started |
 | [resolver.md](resolver.md) | How "United to Tokyo in March" becomes a specific flight |

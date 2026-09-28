@@ -461,7 +461,10 @@ export function FlightMap({
               setCursor(dates[Number(event.target.value)] ?? null);
             }}
             aria-label="Scrub through your flights by date"
-            className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-paper-300 accent-chart-600"
+            // The element itself is 24px tall so it can actually be grabbed;
+            // the hairline you see is the track inside it, drawn by the
+            // `.scrubber` rules in index.css.
+            className="scrubber min-w-0 flex-1"
           />
 
           <span className="tabular w-28 shrink-0 text-right text-[10px] text-ink-400">
@@ -481,7 +484,10 @@ export function FlightMap({
                 onClick={() => onColorModeChange(mode.id)}
                 title={`Colour arcs by ${mode.label.toLowerCase()}`}
                 className={cn(
-                  "rounded-md px-2 py-1 text-[10px] transition-colors",
+                  // 10px type with py-1 lands at 23px, a shade under the 24px
+                  // WCAG 2.5.8 minimum target size. py-1.5 takes the hit area
+                  // over the line without changing the type size.
+                  "rounded-md px-2 py-1.5 text-[10px] transition-colors",
                   mode.id === colorMode
                     ? "bg-chart-600/15 text-chart-600"
                     : "text-ink-400 hover:text-ink-600",
