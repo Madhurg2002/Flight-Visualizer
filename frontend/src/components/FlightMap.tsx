@@ -438,7 +438,6 @@ export function FlightMap({
           // composited, rather than cleared after the last paint.
           canvasContextAttributes={{ preserveDrawingBuffer: true }}
         />
-        <Attribution text={getBasemap(basemap).attribution} />
       </DeckGL>
 
       {/* ----------------------------------------------------- playback bar */}
@@ -549,6 +548,10 @@ export function FlightMap({
         </button>
       )}
 
+      {/* Rendered once, here, rather than as a DeckGL child: DeckGL portals
+          its children above the map, so an attribution placed in there ends up
+          stacked under the corner controls instead of sitting at the foot of
+          the map where the licences expect it. */}
       <Attribution text={getBasemap(basemap).attribution} />
     </div>
   );
