@@ -12,8 +12,8 @@ import type { BasemapId, ColorMode } from "../components/FlightMap";
 
 /**
  * deck.gl and MapLibre are ~1.9MB together, so the map stays a lazy chunk
- * here exactly as it is on the signed-in dashboard. The landing page still
- * avoids it entirely by drawing its own SVG globe.
+ * here exactly as it is on the signed-in dashboard. The landing page shows
+ * the same map, but holds it back until the browser is idle.
  */
 const FlightMap = lazy(() =>
   import("../components/FlightMap").then((m) => ({ default: m.FlightMap })),

@@ -20,9 +20,9 @@ import { ThemeToggle } from "../lib/theme";
 import { downloadTextFile, flightsToCsv } from "../lib/csv";
 
 /**
- * deck.gl and MapLibre are ~1.9MB together and only the dashboard renders a
- * map — the landing page uses a hand-drawn SVG globe. Loading it on demand
- * keeps that weight off the marketing page entirely.
+ * deck.gl and MapLibre are ~1.9MB together. Loading the map on demand keeps
+ * that weight out of the initial bundle — on the landing page it is deferred
+ * further still, until the browser is idle.
  */
 const FlightMap = lazy(() =>
   import("../components/FlightMap").then((m) => ({ default: m.FlightMap })),

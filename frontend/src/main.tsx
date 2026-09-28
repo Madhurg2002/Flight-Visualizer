@@ -4,7 +4,6 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { AuthProvider } from "./lib/auth";
 import { ThemeProvider } from "./lib/theme";
-import "maplibre-gl/dist/maplibre-gl.css";
 import "./index.css";
 
 const container = document.getElementById("root");

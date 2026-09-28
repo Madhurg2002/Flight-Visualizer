@@ -26,11 +26,43 @@ export default defineConfig({
     // cheap to cache.
     rollupOptions: {
       output: {
-        manualChunks: {
+        // The map has to be genuinely unreachable until something imports it.
+        //
+        // It was not. `FlightMap` has always been behind `React.lazy`, but
+        // Vite's own dynamic-import helper was being folded into the 1.9MB map
+        // chunk, so the entry chunk carried a *static* import of it, index.html
+        // carried a `modulepreload` for it, and every page — the landing page
+        // included — pulled the whole map stack at high priority before it had
+        // painted anything. The bundler was quietly undoing the lazy import.
+        //
+        // Function form rather than the object form, because the object form is
+        // a blunt prefix match over module ids and matching on the resolved
+        // path states exactly which packages are the map.
+        manualChunks(id: string) {
+          // Vite injects these two virtual modules to implement `import()` with
+          // dependency preloading. Left to Rollup's own placement they end up
+          // folded into whichever chunk is being built alongside them — here,
+          // the 1.9MB map chunk — which the entry then has to import
+          // statically, and the whole point of a lazy chunk evaporates. Naming
+          // them puts a 1KB chunk where it belongs: imported by the entry,
+          // preloaded, harmless.
+          if (id.startsWith("\0vite/")) return "vite-preload";
+          if (
+            /[\\/]node_modules[\\/](maplibre-gl|react-map-gl|@deck\.gl|@luma\.gl|@math\.gl|@loaders\.gl|@probe\.gl)[\\/]/.test(
+              id,
+            )
+          ) {
+            return "map";
+          }
           // react-map-gl has no bare entry point; the MapLibre binding lives at
-          // the /maplibre subpath.
-          map: ["maplibre-gl", "@deck.gl/core", "@deck.gl/layers", "react-map-gl/maplibre"],
-          react: ["react", "react-dom", "react-router-dom"],
+          // the /maplibre subpath, which the pattern above already catches.
+          if (
+            /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(
+              id,
+            )
+          ) {
+            return "react";
+          }
         },
       },
     },

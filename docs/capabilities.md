@@ -91,7 +91,8 @@ has. See
 | Fly-to on selection | **Shipped** | Selecting in the list flies the camera to the arc midpoint |
 | PNG export | **Shipped** | Basemap and overlay composited into one download |
 | Reset view | **Shipped** | — |
-| Globe view | **Planned** | The landing-page globe is a real orthographic projection and can be promoted |
+| Globe view | **Planned** | The globe on the landing page is a real orthographic projection and can be promoted |
+| Map on the landing page | **Shipped** | The real map, over the sample log, in the hero. Deferred until the browser is idle, so the 1.9MB map chunk is not on the marketing page's critical path |
 | Animated arc drawing | **Planned** | Playback reveals whole flights; drawing them progressively is shader work |
 | Country choropleth | **Planned** | Needs country polygons, not just airport points |
 

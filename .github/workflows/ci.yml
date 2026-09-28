@@ -51,3 +51,17 @@ jobs:
             exit 1
           fi
           echo "client bundle is free of the airport dataset"
+
+      # `React.lazy` is only a promise about the bundle, and something else can
+      # quietly break it: index.html asking the browser to preload the map
+      # chunk, or a stylesheet link for it, means every page pays for the map
+      # before anything is painted. The landing page is the page that suffers
+      # most, since it has no map until well after first paint.
+      - name: Assert the map chunk is not on the critical path
+        run: |
+          if grep -qE 'modulepreload[^>]*map-|stylesheet[^>]*map-' frontend/dist/index.html; then
+            echo "::error::the map chunk is preloaded by index.html"
+            grep -oE '(modulepreload|stylesheet)[^>]*' frontend/dist/index.html
+            exit 1
+          fi
+          echo "index.html does not preload the map"
