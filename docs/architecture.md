@@ -198,6 +198,30 @@ palettes were checked against every surface they are actually used on —
 body text, headings, muted text, the primary button, tinted chips, the
 eyebrow and the headline gradient — and both clear WCAG AA.
 
+### A provider is a value, not a dependency
+
+`backend/server/flight-lookup/` is the only part of the app that talks to a
+service it does not control, and it is shaped so that the second one is a new
+file rather than a rewrite. `types.ts` holds the interface and the query
+parsing, `amadeus.ts` is one implementation, and `index.ts` picks whichever is
+configured. Nothing outside that directory knows a provider exists, and no
+handler imports one directly.
+
+Two properties are load-bearing rather than tidiness:
+
+- **The credentials cannot reach the browser.** They are read from the
+  environment inside a route handler, and the browser has no client for this at
+  all — adding one would mean writing new code, because there is nothing in the
+  bundle to repurpose.
+- **It is optional in the strict sense.** With no key configured the resolver
+  answers exactly as it always has, the UI renders no lookup control, and the
+  endpoint answers `configured: false` rather than failing. A capability that
+  changes the app's behaviour when its dependency is missing is not optional;
+  this one changes nothing.
+
+The provider is metered, so the route is behind sign-in — an anonymous endpoint
+that spends somebody's quota is an open tab in front of a bill.
+
 ### Two entry points into `flight-core`
 
 `flight-core` exports from two files, and the split is load-bearing.

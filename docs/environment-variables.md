@@ -1,14 +1,18 @@
 # Environment variables
 
-The app reads one variable it cannot run without, and two more that only matter
-when the frontend and the API are on different hosts — which is how it is
-deployed now. Everything else is derived.
+The app reads one variable it cannot run without. Two more matter when the
+frontend and the API are on different hosts — which is how it is deployed now —
+and the rest are optional, each one turning on a capability that works without
+it. Everything else is derived.
 
 | Variable | Where | Required | What it is |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | API | In production | A Postgres connection string. The one thing the app cannot run without. |
 | `ALLOWED_ORIGINS` | API | When split across hosts | Comma-separated list of frontend origins allowed to call the API. |
 | `VITE_API_URL` | Build | When split across hosts | The API's base URL, baked into the frontend at build time. |
+| `AMADEUS_CLIENT_ID` | API | No | Enables live flight lookup. Without it, the app is unchanged. |
+| `AMADEUS_CLIENT_SECRET` | API | No | As above. Both or neither. |
+| `AMADEUS_ENV` | API | No | `production` for live data; anything else uses the test host. |
 | `SEED_DEMO_PASSWORD` | API | No | Password for the demo account. Without it, no demo data is created. |
 | `SEED_DEMO_EMAIL` | API | No | Who that account is. Defaults to `demo@skytrace.app`. |
 | `API_PORT` | Development | No | The port the API listens on. Defaults to `3210`. |
@@ -238,6 +242,44 @@ takes the service down with it is worse than one that does not run.
 instead, for when you want the change reviewed in a diff before it reaches a
 shared database. Neither is needed at runtime: the running API never loads
 migration tooling.
+
+## Live flight data
+
+The one query the compiled dataset cannot answer. OpenFlights has routes but no
+schedules, so `UA 1234` offline can only come back as the carrier's hub routes
+with a reason explaining why — honest, and not useful.
+
+Set `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` and the app asks a real
+provider instead. The credentials are read in `backend/server/flight-lookup/`
+and never reach the browser: every call is made from a route handler, and there
+is no client-side code that could be made to send them.
+
+```
+AMADEUS_CLIENT_ID=…
+AMADEUS_CLIENT_SECRET=…
+AMADEUS_ENV=production
+```
+
+`AMADEUS_ENV` defaults to the provider's test host, which is free but carries
+synthetic schedules — leave it unset while developing so a real lookup cannot
+be mistaken for a real flight.
+
+Three things this deliberately does not change:
+
+- **Without the keys, nothing is different.** The lookup button does not render,
+  the resolver answers exactly as it always has, and no request is made. The
+  server answers `{"configured": false}`, which is a success rather than an
+  error, so a client handed it falls back instead of reporting a failure.
+- **It is behind sign-in.** The provider meters calls; an open endpoint that
+  spends them is a liability rather than a feature.
+- **The token is cached.** One token request is reused until shortly before it
+  expires, because the free tier counts calls and a token per lookup would
+  spend half the budget before answering anything.
+
+Times come back in the **airport's local time** and are labelled as such. The
+provider reports no timezone, so coercing them to UTC would silently shift a
+flight by a day; a log entry that is an hour wrong is worse than one that says
+which clock it read.
 
 ## What there is not
 

@@ -25,19 +25,25 @@ meant.
 | Route-pair parsing | **Shipped** | "SFO to JFK", "SFO-JFK", "SFO → JFK" |
 | Direction detection | **Shipped** | "from London" vs "to Tokyo" vs bare codes |
 | Candidate ranking | **Shipped** | Both endpoints known → the route is certain |
-| Airline-only suggestions | **Partial** | Suggests the carrier's hub routes; cannot map a flight number to a route offline |
+| Airline-only suggestions | **Partial** | Offline it suggests the carrier's hub routes; with a flight provider configured it can check the real schedule |
+| Live flight lookup | **Partial** | `GET /lookup/flight` against a real provider, server-side. The UI offers it only when a key is configured, so the app is unchanged without one |
 | Confidence labelling | **Shipped** | Every candidate shows `exact` / `high` / `medium` and why |
 | "Still needs" reporting | **Shipped** | Names the missing fields rather than guessing |
 | Boarding-pass photo (OCR) | **Planned** | — |
 | Booking-confirmation email import | **Planned** | Highest-value version of the above |
-| Live flight status lookup | **Planned** | Needs a paid aviation API |
+| Live flight status lookup | **Partial** | A provider lookup exists and is wired into the add-flight flow; it is off until an API key is set |
 
 ### Why "airline-only" is partial
 
 Flight numbers are not in the OpenFlights dataset — it has routes, not
 schedules. Given "UA 1234" with no airports we can offer the carrier's main
-routes and ask, but we cannot say *which* one was flight 1234. Closing this gap
-means adding a real-time flight API; see [roadmap.md](roadmap.md).
+routes and ask, but we cannot say *which* one was flight 1234.
+
+With `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` set, the add-flight flow
+offers a live lookup that answers exactly that, and fills the form with the
+route the provider reported. Without them the app behaves exactly as it always
+has. See
+[environment-variables.md](environment-variables.md#live-flight-data).
 
 ---
 
@@ -138,12 +144,13 @@ means adding a real-time flight API; see [roadmap.md](roadmap.md).
 | CSV import/export checks | **Shipped** | `bun run check:csv` — 34 assertions over dates, header mapping and round-tripping |
 | CI on every push and PR | **Shipped** | Typecheck, both harnesses, a production build, and an assertion that the airport dataset never reached the client bundle |
 | Unit tests | **Partial** | Two assertion harnesses in CI plus a resolver harness you read by eye; no test runner (`bun test`) yet |
-| API tested against a real Postgres | **Shipped** | `bun run check:api` drives the real routes in-process, 193 assertions |
+| API tested against a real Postgres | **Shipped** | `bun run check:api` drives the real routes in-process, 217 assertions |
 | Schema applied on boot | **Shipped** | `start` runs `db:push` first, so a deploy has no release step |
 | Demo data on boot | **Shipped** | `start` seeds a demo account with real derived figures, when `SEED_DEMO_PASSWORD` is set; idempotent, never touches a real log |
 | Split deployment | **Shipped** | Frontend, API and database on three hosts; two environment variables |
 | Offline resolver | **Shipped** | Needs no third-party API to function |
-| Aviation API hook | **Planned** | Designed, not implemented |
+| Aviation API hook | **Shipped** | One provider behind an interface, server-side, off without a key; a second is a new file |
+| Live flight lookup | **Partial** | Real schedules for a flight number, filling the form; no status polling, no tracking |
 | Snapshot semantics for saved flights | **Shipped** | Distance/duration/CO₂ are stored, not re-derived |
 
 ---

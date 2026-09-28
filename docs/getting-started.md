@@ -83,7 +83,7 @@ Run from the repository root.
 | `bun run check` | Run the three harnesses below — the fastest confidence check in the repo |
 | `bun run check:resolver` | Resolver harness: parse and top candidates for a spread of inputs |
 | `bun run check:csv` | 34 assertions over CSV dates, header mapping and round-tripping |
-| `bun run check:api` | 193 assertions over the real API, against an in-process Postgres |
+| `bun run check:api` | 217 assertions over the real API, against an in-process Postgres |
 | `bun run db:push` | Create or update the tables from `backend/db/schema.ts` |
 | `bun run db:seed` | Add the demo account and its flights, if `SEED_DEMO_PASSWORD` is set |
 | `bun run db:generate` | Write a reviewable SQL migration instead of applying it directly |

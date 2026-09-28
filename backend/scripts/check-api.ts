@@ -856,6 +856,140 @@ console.log("demo data");
   equal("  and writes nothing while refusing", (await db.select().from(schema.users).where(eq(schema.users.email, "short@seeded.test"))).length, 0);
 }
 
+console.log("flight lookup");
+{
+  // The provider is stubbed, because the credentials are the one thing these
+  // checks cannot have and the shape of the answer is everything they can.
+  // The point being proved is that a real flight number becomes a real
+  // candidate — and that nothing at all depends on the key being present.
+  const { normaliseQuery, resetTokenCache } = await import("../server/flight-lookup/index.ts");
+  const realFetch = globalThis.fetch;
+
+  equal("parses a carrier and a number", normaliseQuery("ua", "1234"), { airline: "UA", flightNumber: "1234" });
+  equal("parses them written together", normaliseQuery(null, "UA1234"), { airline: "UA", flightNumber: "1234" });
+  check("a number with no carrier is not enough", normaliseQuery(null, "1234") === null);
+  check("neither is nonsense", normaliseQuery("not", "a flight") === null);
+
+  const caller = await account("lookup@example.com");
+  const anon = makeClient();
+
+  // Nothing configured is the default state of this repository.
+  {
+    const savedId = process.env.AMADEUS_CLIENT_ID;
+    const savedSecret = process.env.AMADEUS_CLIENT_SECRET;
+    delete process.env.AMADEUS_CLIENT_ID;
+    delete process.env.AMADEUS_CLIENT_SECRET;
+    resetTokenCache();
+
+    const status = await caller.call("GET", "/api/lookup/status");
+    equal("the status endpoint reports it is off", status.body, { configured: false });
+
+    const miss = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("an unconfigured lookup is not an error", miss.status, 200);
+    equal("  and says so rather than failing", miss.body, { configured: false, provider: null, flight: null });
+
+    if (savedId !== undefined) process.env.AMADEUS_CLIENT_ID = savedId;
+    if (savedSecret !== undefined) process.env.AMADEUS_CLIENT_SECRET = savedSecret;
+    resetTokenCache();
+  }
+
+  const badQuery = await caller.call("GET", "/api/lookup/flight?airline=UA");
+  equal("a missing flight number is rejected", badQuery.status, 400);
+  const badDate = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234&date=14-03-2025");
+  equal("a badly written date is rejected", badDate.status, 400);
+  const signedOut = await anon.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+  equal("a signed-out caller cannot spend the provider's quota", signedOut.status, 401);
+  const signedOutStatus = await anon.call("GET", "/api/lookup/status");
+  equal("  nor learn whether one is configured", signedOutStatus.status, 401);
+
+  process.env.AMADEUS_CLIENT_ID = "test-id";
+  process.env.AMADEUS_CLIENT_SECRET = "test-secret";
+  resetTokenCache();
+
+  /** Serve one canned provider response, and count what it was asked. */
+  const stub = (responses: Record<string, unknown>) => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      calls.push(url);
+      for (const [fragment, body] of Object.entries(responses)) {
+        if (url.includes(fragment)) {
+          return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+        }
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+    return calls;
+  };
+
+  const tokenResponse = { access_token: "tok-123", expires_in: 1799 };
+  const flightRow = (from: string, to: string) => ({
+    flightDesignator: { status: "Scheduled" },
+    airline: { iataCode: "UA" },
+    aircraft: { type: "B739" },
+    departure: { iataCode: from, terminal: "3", gate: "G12", scheduled: "2025-03-14T10:35:00" },
+    arrival: { iataCode: to, terminal: "B", scheduled: "2025-03-14T18:52:00" },
+  });
+
+  {
+    const calls = stub({
+      "oauth2/token": tokenResponse,
+      "schedule/flights": { data: [flightRow("SFO", "JFK")] },
+    });
+    const found = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234&date=2025-03-14");
+    check("a real flight comes back", found.status === 200, found);
+    equal("  with the route the provider gave", found.body?.flight?.departure?.iata, "SFO");
+    equal("  and the other end of it", found.body?.flight?.arrival?.iata, "JFK");
+    equal("  the equipment it was worked", found.body?.flight?.aircraft, "B739");
+    equal("  the terminal", found.body?.flight?.departure?.terminal, "3");
+    check("  the times are the airport's local time, not a coerced UTC", found.body?.flight?.departure?.scheduledAt === "2025-03-14T10:35", found.body?.flight?.departure?.scheduledAt);
+    check("the request carried the carrier and date", calls.some((u) => u.includes("carrierCode=UA") && u.includes("flightNumber=1234") && u.includes("scheduledDepartureDate=2025-03-14")), calls);
+    check("and the token was fetched, not the key", calls.some((u) => u.includes("oauth2/token")) && !calls.some((u) => u.includes("test-secret")));
+  }
+
+  {
+    // The second lookup must reuse the token: the free tier counts calls, and
+    // spending one per search would halve the budget before answering anything.
+    resetTokenCache();
+    const calls = stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [flightRow("SFO", "JFK")] } });
+    await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1235");
+    equal("the token is fetched once and cached across lookups", calls.filter((u) => u.includes("oauth2/token")).length, 1);
+  }
+
+  {
+    const calls = stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
+    const none = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=9999&date=2025-03-14");
+    equal("a flight the provider does not know is a 404", none.status, 404);
+    check("  and the message suggests what to change", String(none.body?.error).includes("without the date"), none.body);
+    resetTokenCache();
+    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
+  }
+
+  {
+    // A provider that names an airport this app has never heard of cannot be
+    // drawn on the map, so it is refused rather than offered as a candidate.
+    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [flightRow("SFO", "ZZZ")] } });
+    const unmappable = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=1&date=2025-03-14");
+    equal("a flight this app cannot place is a 422", unmappable.status, 422);
+    resetTokenCache();
+    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
+  }
+
+  {
+    globalThis.fetch = (async () => {
+      throw new Error("ENOTFOUND api.amadeus.com");
+    }) as typeof fetch;
+    const down = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("a provider that is down is a 502, not a 500", down.status, 502);
+  }
+
+  globalThis.fetch = realFetch;
+  delete process.env.AMADEUS_CLIENT_ID;
+  delete process.env.AMADEUS_CLIENT_SECRET;
+  resetTokenCache();
+}
+
 console.log("boot wiring");
 {
   // Two settings that decide whether a deployment applies its own schema, and

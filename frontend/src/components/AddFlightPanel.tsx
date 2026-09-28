@@ -7,10 +7,11 @@ import {
   formatDuration,
   todayIso,
 } from "@skytrace/flight-core";
-import type { Cabin, FlightCandidate, MatchConfidence, Trip } from "@skytrace/types";
+import type { Cabin, FlightCandidate, LiveFlight, MatchConfidence, Trip } from "@skytrace/types";
 import { Button, Input, Label, Select, Textarea, cn } from "@skytrace/ui";
 import { ArrowRight, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
 import { AirportAutocomplete } from "./AirportAutocomplete";
+import { LiveFlightLookup } from "./LiveFlightLookup";
 import { api } from "../lib/api";
 
 const CONFIDENCE_STYLE: Record<MatchConfidence, string> = {
@@ -80,6 +81,17 @@ export function AddFlightPanel({
       ...(candidate.airlineCode ? { airlineCode: candidate.airlineCode } : {}),
       ...(candidate.airlineName ? { airlineName: candidate.airlineName } : {}),
       ...(candidate.flightNumber ? { flightNumber: candidate.flightNumber } : {}),
+    });
+  }
+
+  function setDraftFromLiveFlight(flight: LiveFlight) {
+    setDraft({
+      fromIata: flight.departure.iata,
+      toIata: flight.arrival.iata,
+      // The provider's local date, sliced to a calendar day. It is the
+      // airport's clock, which is the date the user remembers.
+      flightDate: flight.departure.scheduledAt.slice(0, 10),
+      ...(flight.aircraft ? { aircraft: flight.aircraft } : {}),
     });
   }
 
@@ -196,6 +208,22 @@ export function AddFlightPanel({
               </ul>
             </>
           )}
+        </div>
+      )}
+
+      {/* A flight number is the one query the offline dataset cannot answer: it
+          has routes but no schedules, so `UA 1234` can only come back as the
+          carrier's hub routes — and the resolver then fills the form with one of
+          those guesses. So this sits outside the results block entirely: it has
+          to be reachable both before a candidate is chosen and after one has
+          been auto-filled. */}
+      {result && submitted !== null && (
+        <div className={draft ? "mt-4" : ""}>
+          <LiveFlightLookup
+            text={submitted}
+            hasCandidates={result.candidates.length > 0}
+            onFound={setDraftFromLiveFlight}
+          />
         </div>
       )}
 
