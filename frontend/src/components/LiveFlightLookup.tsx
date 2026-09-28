@@ -29,21 +29,27 @@ export function LiveFlightLookup({
   onFound: (flight: LiveFlight) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  // The answer is stored against the question it answers. Editing the box
+  // changes the question, and an answer left on screen under a different
+  // question is worse than no answer: "Found SFO → NRT" sitting under a
+  // button that would now look up UA 999 is a plain misreading.
+  const [answer, setAnswer] = useState<{ key: string; text: string } | null>(null);
 
   const status = useQuery(api.lookup.status);
+  const parsed = parse(text);
+  const queryKey = parsed ? `${parsed.airline}${parsed.flightNumber}${parsed.date ?? ""}` : null;
+  const message = answer && answer.key === queryKey ? answer.text : null;
 
   // With no credentials the server answers 401 signed out, and `configured`
   // stays undefined — either way there is nothing to offer, and no button.
   if (status?.configured !== true) return null;
 
-  const parsed = parse(text);
   if (!parsed) return null;
 
   async function run() {
-    if (!parsed) return;
+    if (!parsed || queryKey === null) return;
     setBusy(true);
-    setMessage(null);
+    setAnswer(null);
     try {
       const result = await call(api.lookup.flight, {
         airline: parsed.airline,
@@ -52,14 +58,15 @@ export function LiveFlightLookup({
       });
       if (result.flight) {
         onFound(result.flight);
-        setMessage(`Found ${result.flight.departure.iata} → ${result.flight.arrival.iata}.`);
+        setAnswer({ key: queryKey, text: `Found ${result.flight.departure.iata} → ${result.flight.arrival.iata}.` });
       } else {
-        setMessage("No provider is configured on this deployment.");
+        setAnswer({ key: queryKey, text: "No provider is configured on this deployment." });
       }
     } catch (error) {
       // The server's own wording is the useful part: "try without the date"
       // is an instruction, and "the provider did not answer" is a retry.
-      setMessage(error instanceof ApiError ? error.message : "The lookup failed.");
+      const text = error instanceof ApiError ? error.message : "The lookup failed.";
+      setAnswer({ key: queryKey, text });
     } finally {
       setBusy(false);
     }

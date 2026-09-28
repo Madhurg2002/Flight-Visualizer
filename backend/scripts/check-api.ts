@@ -958,6 +958,55 @@ console.log("flight lookup");
   }
 
   {
+    // Caching a token is not enough on its own: three lookups opened together
+    // on a cold cache would each miss the cache and each spend a call. They
+    // have to share the one request that is already in flight.
+    resetTokenCache();
+    let tokenCalls = 0;
+    const realSetTimeout = setTimeout;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      const body = url.includes("oauth2/token") ? tokenResponse : { data: [flightRow("SFO", "JFK")] };
+      if (url.includes("oauth2/token")) {
+        tokenCalls += 1;
+        // Hold it open, so every lookup below is demonstrably concurrent.
+        await new Promise((resolve) => realSetTimeout(resolve, 50));
+      }
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+
+    const answered = await Promise.all([
+      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234"),
+      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1235"),
+      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1236"),
+    ]);
+    equal("concurrent lookups share one token request", tokenCalls, 1);
+    check("  and every one of them is still answered", answered.every((r) => r.status === 200), answered);
+    resetTokenCache();
+  }
+
+  {
+    // An unrecognised status falls back to whether the flight has arrived. The
+    // comparison is wall-clock to wall-clock, so a flight near midnight is
+    // classified the same wherever the host happens to run.
+    const unrecognised = (arrival: string) => ({
+      ...flightRow("SFO", "JFK"),
+      flightDesignator: { status: "Teleported" },
+      arrival: { iataCode: "JFK", terminal: "B", scheduled: arrival },
+    });
+
+    resetTokenCache();
+    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [unrecognised("2020-01-02T03:04:00")] } });
+    const past = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("an unrecognised status in the past reads as landed", past.body?.flight?.status, "landed");
+
+    resetTokenCache();
+    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [unrecognised("2099-01-02T03:04:00")] } });
+    const future = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("  and one in the future as unknown", future.body?.flight?.status, "unknown");
+  }
+
+  {
     const calls = stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
     const none = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=9999&date=2025-03-14");
     equal("a flight the provider does not know is a 404", none.status, 404);

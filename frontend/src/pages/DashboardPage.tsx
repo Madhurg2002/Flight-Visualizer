@@ -2,6 +2,7 @@ import { useQuery } from "../lib/api";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, cn } from "@skytrace/ui";
+import { yearOf } from "@skytrace/flight-core";
 import { Download, LogOut, Plane } from "lucide-react";
 import { AddFlightPanel } from "../components/AddFlightPanel";
 import { BulkImportPanel } from "../components/BulkImportPanel";
@@ -42,14 +43,53 @@ export function DashboardPage() {
   // Trip filter. Kept here rather than inside the list so the map and the
   // export can narrow by the same thing.
   const [tripFilter, setTripFilter] = useState<string | null>(null);
+  // The text and year filters live here for the same reason, and because a
+  // filter the map does not obey is worse than no filter at all: the list
+  // narrows to four flights while the map still draws all eighty, and the two
+  // halves of the dashboard end up answering different questions.
+  const [query, setQuery] = useState("");
+  const [year, setYear] = useState<string>("all");
 
   const all = useMemo(() => flights ?? [], [flights]);
   const tripList = useMemo(() => trips ?? [], [trips]);
 
-  const list = useMemo(
+  // What the trip alone leaves, which is both the starting point for the text
+  // filter and the number the "3 of 12" counter measures against.
+  const tripScoped = useMemo(
     () => (tripFilter ? all.filter((f) => f.tripId === tripFilter) : all),
     [all, tripFilter],
   );
+
+  const years = useMemo(
+    () => [...new Set(tripScoped.map((f) => yearOf(f.flightDate)))].sort().reverse(),
+    [tripScoped],
+  );
+
+  // One filter, applied once. Everything downstream reads `list`, so the map,
+  // the list and the selection can never disagree about what is being shown.
+  const list = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return tripScoped.filter((flight) => {
+      if (year !== "all" && yearOf(flight.flightDate) !== year) return false;
+      if (!q) return true;
+      return [
+        flight.fromIata,
+        flight.toIata,
+        flight.fromCity,
+        flight.toCity,
+        flight.fromName,
+        flight.toName,
+        flight.airlineName ?? "",
+        flight.airlineCode ?? "",
+        flight.flightNumber ?? "",
+        flight.notes ?? "",
+        flight.seat ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [tripScoped, query, year]);
 
   const selected = useMemo(
     () => all.find((f) => f.id === selectedId) ?? null,
@@ -179,7 +219,17 @@ export function DashboardPage() {
                 </button>
               </p>
             )}
-            <FlightList flights={list} selectedId={selectedId} onSelect={setSelectedId} />
+            <FlightList
+              flights={list}
+              total={tripScoped.length}
+              query={query}
+              onQueryChange={setQuery}
+              year={year}
+              onYearChange={setYear}
+              years={years}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
           </div>
         </aside>
       </main>
