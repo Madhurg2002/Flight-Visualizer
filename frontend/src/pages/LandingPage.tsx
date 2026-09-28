@@ -125,6 +125,9 @@ export function LandingPage() {
             ) : (
               <>
                 <Button asChild variant="ghost" size="sm">
+                  <Link to="/dashboard">See the map</Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
                   <Link to="/auth">Sign in</Link>
                 </Button>
                 <Button asChild variant="primary" size="sm">
@@ -191,6 +194,18 @@ export function LandingPage() {
                     Log your first flight
                   </Link>
                 </Button>
+                {/* The map is the product, and `/dashboard` is not behind a
+                    guard — a visitor gets the whole thing over a sample log.
+                    Without this the only route to it is typing the URL, which
+                    is why the page could look like a site with no map at all. */}
+                {!isAuthenticated && (
+                  <Button asChild size="lg" variant="outline">
+                    <Link to="/dashboard">
+                      <MapIcon />
+                      See the map
+                    </Link>
+                  </Button>
+                )}
                 <Button asChild size="lg" variant="outline">
                   <a href="#how">See how it works</a>
                 </Button>
