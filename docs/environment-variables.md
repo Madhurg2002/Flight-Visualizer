@@ -82,7 +82,7 @@ anything, so the app looks merely broken.
 **On the API (Render):** `ALLOWED_ORIGINS`
 
 ```
-ALLOWED_ORIGINS=https://flight-visualizer-frontend-cyan.vercel.app
+ALLOWED_ORIGINS=https://flightrace.vercel.app
 ```
 
 Origins, not URLs-with-paths, comma-separated for more than one. This is an
@@ -90,6 +90,13 @@ allowlist, not a pattern, and `*` is refused: it would let any site on the
 internet read this user's flight log using their session. A request from an
 origin not on the list is answered without any CORS header, which the browser
 then blocks.
+
+An origin is scheme + host + port and nothing else, and it is the one the
+*page* was loaded from — not the one a redirect lands on. Renaming a Vercel
+project leaves the old domain answering with a `307` to the new one, and a
+redirect does not change the `Origin` a browser sends: the old domain still
+gets `403`, the new one gets `204`. If a deployment starts failing right after
+a rename, this is the first thing to check.
 
 **On the frontend (Vercel):** `VITE_API_URL`
 
@@ -112,7 +119,7 @@ willing to be called from the frontend's origin at all:
 
 ```bash
 curl -s -i -X OPTIONS https://flight-visualizer.onrender.com/api/auth/signup \
-  -H "Origin: https://flight-visualizer-frontend-cyan.vercel.app" \
+  -H "Origin: https://flightrace.vercel.app" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: content-type,x-skytrace-client"
 ```
