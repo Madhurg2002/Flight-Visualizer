@@ -548,20 +548,40 @@ console.log("node adapter");
       ...over,
     }) as never;
 
+  /** Stands in for the unread stream a plain Node request arrives as. */
+  const streamOf = (text: string) => {
+    const listeners: Record<string, ((arg: unknown) => void)[]> = {};
+    return {
+      on(event: string, fn: (arg: unknown) => void) {
+        (listeners[event] ??= []).push(fn);
+        return this;
+      },
+      emit(event: string, arg: unknown) {
+        for (const fn of listeners[event] ?? []) fn(arg);
+      },
+      feed() {
+        this.emit("data", Buffer.from(text, "utf8"));
+        this.emit("end", undefined);
+      },
+    };
+  };
+
+  // Stands in for a Node `ServerResponse`, and deliberately provides only what
+  // Node actually provides. An earlier version of this mock also had
+  // `status()`, which let the adapter call an Express method that does not
+  // exist on a real response: the server bound its port and then answered every
+  // request with a 500. A faithful stand-in fails loudly instead.
   const capture = () => {
     const headers: Record<string, string | string[]> = {};
     return {
       statusCode: 0,
       body: "",
       ended: false,
+      headersSent: false,
       setHeader: (k: string, v: string | string[]) => {
         headers[k.toLowerCase()] = v;
       },
       getHeader: (k: string) => headers[k.toLowerCase()],
-      status(code: number) {
-        this.statusCode = code;
-        return this;
-      },
       end(chunk?: string) {
         this.body = chunk ?? "";
         this.ended = true;
@@ -570,30 +590,52 @@ console.log("node adapter");
     };
   };
 
-  const from = toWebRequest(nodeRequest());
+  const from = await toWebRequest(nodeRequest());
   equal("rebuilds the path and host", from.url, "http://skytrace.test/api/flights");
   equal("keeps the method", from.method, "GET");
   equal("carries a GET no body", from.body, null);
 
-  const withQuery = toWebRequest(nodeRequest({ url: "/api/resolve?query=UA+1234" }));
+  const withQuery = await toWebRequest(nodeRequest({ url: "/api/resolve?query=UA+1234" }));
   equal("keeps the query string", new URL(withQuery.url).searchParams.get("query"), "UA 1234");
 
-  const fromPlatformQuery = toWebRequest(nodeRequest({ url: "/api/resolve", query: { query: "UA 1234" } }));
+  const fromPlatformQuery = await toWebRequest(nodeRequest({ url: "/api/resolve", query: { query: "UA 1234" } }));
   equal(
     "merges a parsed query the platform supplied",
     new URL(fromPlatformQuery.url).searchParams.get("query"),
     "UA 1234",
   );
 
-  const withBody = toWebRequest(
+  const withBody = await toWebRequest(
     nodeRequest({ method: "POST", url: "/api/auth/signin", body: { email: "a@b.com", password: "x" } }),
   );
   equal("re-serialises a body the platform already parsed", await withBody.text(), '{"email":"a@b.com","password":"x"}');
+
+  // Plain Node hands over an unread stream and no `req.body` at all. Reading
+  // only the platform's parsed body means every POST arrives empty on a Node
+  // host: sign-in and saving fail while the platform build works fine.
+  const streamed = streamOf('{"email":"c@d.com","password":"y"}');
+  const pending = toWebRequest(
+    nodeRequest({ method: "POST", url: "/api/auth/signin", body: undefined, on: streamed.on.bind(streamed) }),
+  );
+  // Fed before awaiting: `readStream` attaches its listeners synchronously, so
+  // by the time `toWebRequest` returns a promise the stream is ready to deliver.
+  streamed.feed();
+  const fromStream = await pending;
+  equal("reads a body off the Node stream when none was parsed", await fromStream.text(), '{"email":"c@d.com","password":"y"}');
+
+  const emptyPost = await toWebRequest(nodeRequest({ method: "POST", url: "/api/auth/signin" }));
+  equal("an empty POST becomes no body rather than an empty one", emptyPost.body, null);
 
   const cookie = capture();
   await sendWebResponse(cookie as never, new Response(null, { status: 204 }));
   equal("writes the status", cookie.statusCode, 204);
   equal("ends an empty body", cookie.body, "");
+  equal("actually ended the response", cookie.ended, true);
+  equal(
+    "uses only methods a real Node response has",
+    ["status" in cookie, "json" in cookie, "send" in cookie],
+    [false, false, false],
+  );
 
   // The one that browsers actually get wrong: two Set-Cookie headers collapsed
   // into one comma-joined string.

@@ -19,7 +19,7 @@ const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3210);
 const server = createServer((req, res) => {
   void (async () => {
     try {
-      const response = await handleRequest(toWebRequest(req as NodeRequest));
+      const response = await handleRequest(await toWebRequest(req as NodeRequest));
       await sendWebResponse(res as NodeResponse, response);
     } catch (error) {
       // The router turns expected failures into responses; reaching here means

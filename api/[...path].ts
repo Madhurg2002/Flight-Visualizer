@@ -11,7 +11,7 @@ import { handleRequest } from "../backend/server/router.ts";
  * same-origin cookie and the client never has to be told where the API lives.
  */
 export default async function handler(req: unknown, res: unknown): Promise<void> {
-  const request = toWebRequest(req as Parameters<typeof toWebRequest>[0]);
+  const request = await toWebRequest(req as Parameters<typeof toWebRequest>[0]);
   const response = await handleRequest(request);
   await sendWebResponse(res as Parameters<typeof sendWebResponse>[0], response);
 }

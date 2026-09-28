@@ -30,6 +30,25 @@ bun run db:push
 It reads the connection string from the environment, applies the schema from
 `backend/db/schema.ts`, and asks before doing anything destructive.
 
+## Running the API on its own
+
+```bash
+cd backend
+bun start
+```
+
+`start` is the production entry point: plain Node, no hot reload, no Bun
+requirement, and it binds `0.0.0.0`. It reads `PORT` first and `API_PORT`
+second, because hosts disagree about which of those they inject. It is the
+command a deployment platform's "start command" field should hold, and the same
+code the Vercel function runs.
+
+`bun start` and `node server/start.ts` are the same thing — the script is
+plain `node:http`, so either runtime serves it.
+
+If it reports the port is already in use, the development API is probably still
+running from `bun run dev`. Find it with `ss -ltnp | grep 3210`.
+
 ## Running without a database
 
 To work on the frontend with nothing set up:
@@ -51,6 +70,7 @@ Run from the repository root.
 | `bun run dev` | API and frontend together — the normal way to work |
 | `bun run web` | Frontend only, if the API is already running |
 | `bun run api` | API only |
+| `cd backend && bun start` | The API as a plain Node server, without hot reload — what a host runs |
 | `bun run build` | Production build into `frontend/dist` |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
 | `bun run data:build` | Regenerate the aviation datasets from `common/data/raw/` |
