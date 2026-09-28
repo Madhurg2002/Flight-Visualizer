@@ -20,6 +20,12 @@ various government and commercial sources. Attribution is required, and the
 landing page footer credits the dataset. If the project grows commercially,
 re-read the ODbL share-alike terms before shipping.
 
+This matters for licensing, because the ODbL is copyleft for data and is
+**incompatible with MIT**. The repository therefore does not ship a blanket
+licence: the code is MIT, and these files are carved out and carry their own
+notice at `common/data/LICENSE`. The application reads the data at build time
+rather than linking against it, so the split leaves the code licence intact.
+
 ### What gets kept, and what gets thrown away
 
 The generator keeps only the fields the app uses and drops the rest:

@@ -101,14 +101,22 @@ cannot be mapped to a route offline.
 at save time and stored. A log is history, and re-deriving a 2019 entry against
 changed data would quietly alter what the user remembers.
 
-## Data licensing
+## Licensing
 
-The aviation data is the [OpenFlights](https://github.com/jpatokal/openflights)
-public dataset under the **Open Database License (ODbL)**, derived partly from
-OpenStreetMap. Attribution is required and the app credits it. Re-read the
-share-alike terms before any commercial use. Basemap providers each carry their
-own attribution requirements, rendered on the map itself — see
-[docs/map-tiles.md](docs/map-tiles.md).
+The **code** is [MIT](LICENSE) — the short permissive licence that maximises the
+chance anyone actually uses it.
+
+The **aviation data** is a separate matter. The files under `common/data/` come
+from [OpenFlights](https://github.com/jpatokal/openflights) and are under the
+**Open Database License (ODbL)**, derived partly from OpenStreetMap. The ODbL is
+copyleft for data and is *not* compatible with MIT, so it is carved out
+explicitly rather than papered over: see [common/data/LICENSE](common/data/LICENSE).
+Redistributing the data, or a database derived from it, means keeping it under
+the ODbL and carrying the attribution, which the app already renders. Re-read
+the share-alike terms before any commercial use.
+
+Basemap providers each carry their own attribution requirements, shown on the
+map itself — see [docs/map-tiles.md](docs/map-tiles.md).
 
 ## Author
 

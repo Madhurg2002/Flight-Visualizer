@@ -58,13 +58,24 @@ for (const dir of PACKAGE_DIRS) {
     continue;
   }
   watch(absolute, { recursive: true }, (_event, filename) => {
-    if (typeof filename === "string" && filename.endsWith(".generated.ts")) {
+    // Node's recursive watch documents the filename as "may not be provided",
+    // and it has been observed arriving as undefined rather than null. The
+    // generated-file guard below keys on a string, so a missing filename would
+    // slip past it and push a half-written 1.2MB dataset to the deployment.
+    // Treat "we cannot name the file" as "something here changed" and nudge
+    // anyway: serving stale resolver code is the worse of the two failures.
+    if (typeof filename !== "string") {
+      console.log(`[watch-packages] ${dir} changed (filename not reported) — re-pushing Convex`);
+      nudge();
+      return;
+    }
+    if (filename.endsWith(".generated.ts")) {
       // Regenerated datasets are megabytes; the Convex bundle will pick them
       // up on the next edit, and pushing mid-write risks a broken deploy.
       console.log("[watch-packages] dataset regenerated; re-push on the next edit");
       return;
     }
-    console.log(`[watch-packages] ${dir}/${String(filename)} changed — re-pushing Convex`);
+    console.log(`[watch-packages] ${dir}/${filename} changed — re-pushing Convex`);
     nudge();
   });
   watching++;

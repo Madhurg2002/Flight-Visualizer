@@ -127,7 +127,7 @@ export function AuthPage() {
               <button
                 type="button"
                 onClick={() => switchMode(mode === "signIn" ? "signUp" : "signIn")}
-                className="font-medium text-chart-600 transition-colors hover:text-chart-500"
+                className="py-0.5 font-medium text-chart-600 transition-colors hover:text-chart-500"
               >
                 {mode === "signIn" ? "Create one" : "Sign in"}
               </button>
@@ -135,7 +135,7 @@ export function AuthPage() {
 
             <Link
               to="/"
-              className="mt-8 flex items-center justify-center gap-1.5 text-xs text-ink-400 transition-colors hover:text-ink-500"
+              className="mt-8 flex items-center justify-center gap-1.5 py-1 text-xs text-ink-400 transition-colors hover:text-ink-500"
             >
               <ArrowLeft className="size-3.5" />
               Back to the map
