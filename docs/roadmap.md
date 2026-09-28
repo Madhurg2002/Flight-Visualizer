@@ -35,7 +35,7 @@ what was attempted.
 - [x] **Free keyless basemaps** — OpenFreeMap (three styles), CARTO (two) and
       Esri satellite, switchable in-app with attribution rendered on the map.
 - [x] **Monorepo-safe Convex codegen** — the backend bundles workspace packages
-      and the 680KB route table correctly.
+      and the 850KB route table correctly.
 - [x] **Rating UI** — a 1–5 star control in the flight detail panel; clicking the
       current rating clears it.
 - [x] **Bulk import** — one flight per line or a whole CSV, resolved and inserted
@@ -57,6 +57,18 @@ what was attempted.
       distance or airline as well as year, and export the composited map as a PNG.
 - [x] **Author and contact section** — who built it, what they work on, and how to
       reach them, from one config file.
+- [x] **Redesign to a sectional-chart theme** — the visual language now reads as
+      a printed flight log: a paper surface, an ink scale, and a magenta accent
+      used the way a chart series is.
+- [x] **Light and dark mode** — one stylesheet rather than two, with the palette
+      as custom properties swapped at runtime. Both palettes were checked for
+      WCAG AA against every surface they are used on, in the browser, at desktop
+      and mobile widths.
+- [x] **CI** — typecheck, both harnesses and a production build on every push
+      and pull request, plus an assertion that the airport dataset never leaked
+      into the client bundle.
+- [x] **The dev watcher shuts down with its parent** — `watch-packages` used to
+      outlive the run that started it, so a stale process survived every session.
 
 ## In progress
 
@@ -127,8 +139,8 @@ the notes.
       app degrades gracefully when no key is configured. This is also what would
       close the one remaining resolver gap: a flight number cannot be mapped to a
       route offline, because OpenFlights has routes but not schedules.
-- [ ] **A test runner** — there are two runnable harnesses (`bun run check`,
-      covering the resolver and the CSV layer) but no `bun test`, no CI, and
+- [ ] **A test runner** — two runnable harnesses now run in CI (`bun run check`,
+      covering the resolver and the CSV layer), but there is no `bun test` and
       `parse.ts` deserves real assertions before it gets more clever.
 - [ ] **Import into the browser bundle** — the airport autocomplete runs on the
       server, which is correct, but it does mean a keystroke is a round trip.
