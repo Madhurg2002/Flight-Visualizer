@@ -170,6 +170,23 @@ nothing is left running when the app is not.
 That is the whole list. There is no auth provider to configure, no signing key
 to generate, and no migration step that has to run on every deploy.
 
+### One project setting that is easy to get wrong
+
+Leave **Root Directory** empty, so the build runs from the repository root.
+
+Vercel reads `vercel.json` from the root of the repository, but it runs the
+commands from whatever *Root Directory* says — and if that is `frontend`, the
+build looks for `frontend/frontend` and stops with:
+
+```
+ENOENT: No such file or directory: Could not change directory to "frontend" (chdir)
+```
+
+`outputDirectory` is spelled `frontend/dist` for the same reason: it is
+relative to the root directory too. Setting Root Directory to `frontend` and
+fixing the two paths to compensate is possible, but then the serverless
+function in `api/` is outside the project and never deploys.
+
 ## Data you cannot add
 
 There are almost no secrets to manage, by design. The aviation dataset is

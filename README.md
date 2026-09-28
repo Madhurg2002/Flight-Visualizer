@@ -47,6 +47,7 @@ against one inside the process.
 | Command | What it does |
 | --- | --- |
 | `bun run dev` | The API and the frontend together |
+| `bun run start` | The production API alone, the way a host runs it |
 | `bun run check` | Three harnesses — the fastest confidence check in the repo |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
 | `bun run build` | Production build into `frontend/dist` |

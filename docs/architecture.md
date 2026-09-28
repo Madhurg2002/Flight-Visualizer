@@ -15,12 +15,12 @@ skytrace/
 │   │   ├── session.ts           Who is making this request
 │   │   ├── password.ts          scrypt hashing, session tokens
 │   │   ├── dev.ts               The development server
+│   │   ├── node-adapter.ts      Node request/response ↔ fetch
 │   │   └── routes/              auth, flights, trips, resolve
 │   ├── scripts/                 check-api.ts, dev-memory-db.ts
 │   └── drizzle.config.ts        Migration tooling; unused at runtime
 ├── api/                         The Vercel function entry point
-│   ├── [...path].ts             Every /api/* route
-│   └── adapter.ts               Node request/response ↔ fetch
+│   └── [...path].ts             Every /api/* route — and nothing else
 ├── frontend/                    Everything the browser runs
 │   ├── index.html
 │   ├── vite.config.ts
@@ -99,14 +99,19 @@ into client state.
 
 Every route is a function from a `Request` to a `Response` — the WHATWG
 interfaces, which both target runtimes speak natively. `Bun.serve` adapts them
-directly in development; in production `api/adapter.ts` converts Node's
-`IncomingMessage`/`ServerResponse` and calls the same function.
+directly in development; in production `backend/server/node-adapter.ts` converts
+Node's `IncomingMessage`/`ServerResponse` and calls the same function.
 
-`api/adapter.ts` is the only file that knows a Node runtime exists. Adding an
+That adapter is the only file that knows a Node runtime exists. Adding an
 Express dependency, or a second framework for the deployed case, would have
 meant two implementations of every route and two things to keep in step. The
 routing table itself is about twenty lines of paths, which is the smallest
 amount of framework that can do the job.
+
+It also lives in `backend/server/` rather than in `api/`, because Vercel builds
+*every* file in `api/` as its own serverless function. A shared helper sitting
+there is not a helper, it is a second function with no default export, and the
+build fails on it. `api/` therefore contains exactly one file.
 
 ### The API and the app share one origin
 
