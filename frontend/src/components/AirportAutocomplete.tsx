@@ -92,6 +92,21 @@ export function AirportAutocomplete({
     setOpen(false);
   }
 
+  /**
+   * Commit whatever is in the box when focus leaves.
+   *
+   * The value used to be committed only by picking a suggestion, so a user who
+   * typed a code they already knew — "JFK" — saw it sitting in the field, moved
+   * on, and saved a flight with that end missing. The field says "City or
+   * code", so both have to work; the suggestions are a convenience, not the
+   * only way through.
+   */
+  function commit() {
+    const typed = text.trim().toUpperCase();
+    setOpen(false);
+    if (typed && typed !== value) onChange(typed);
+  }
+
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (!open || suggestions.length === 0) {
       if (event.key === "Escape") setOpen(false);
@@ -136,6 +151,7 @@ export function AirportAutocomplete({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
+          onBlur={commit}
           onKeyDown={onKeyDown}
           className={cn("tabular pl-8 uppercase", className)}
         />
