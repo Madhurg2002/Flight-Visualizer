@@ -2,6 +2,7 @@ import { HttpError, UserError, json } from "./http.ts";
 import { makeCtx, resolveUser, type Ctx } from "./session.ts";
 import * as auth from "./routes/auth.ts";
 import * as flightRoutes from "./routes/flights.ts";
+import * as lookupRoutes from "./routes/lookup.ts";
 import * as resolveRoutes from "./routes/resolve.ts";
 import * as tripRoutes from "./routes/trips.ts";
 import { MissingDatabaseUrlError, isDatabaseConfigured, probeDatabase } from "../db/client.ts";
@@ -53,6 +54,8 @@ const ROUTES: Route[] = [
   { method: "POST", path: "/trips/remove", auth: true, handle: tripRoutes.removeTrip },
 
   { method: "GET", path: "/resolve", auth: true, handle: resolveRoutes.resolveQuery },
+  { method: "GET", path: "/lookup/status", auth: true, handle: lookupRoutes.lookupStatus },
+  { method: "GET", path: "/lookup/flight", auth: true, handle: lookupRoutes.lookupFlightQuery },
   { method: "GET", path: "/airports/search", auth: false, handle: resolveRoutes.searchAirport },
   { method: "GET", path: "/airports/airline", auth: false, handle: resolveRoutes.searchAirline },
   { method: "GET", path: "/airports/lookup", auth: false, handle: resolveRoutes.lookupAirport },

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type {
   Cabin,
   FlightLogWithAirports,
+  FlightLookupResult,
   FlightSource,
   FlightStats,
   ImportRowInput,
@@ -148,6 +149,13 @@ export const api = {
   resolve: {
     resolve: endpoint<{ query: string }, ResolveResult>("GET", "/resolve"),
   },
+  lookup: {
+    status: endpoint<Record<string, never>, { configured: boolean }>("GET", "/lookup/status"),
+    flight: endpoint<
+      { airline: string; flightNumber: string; date?: string },
+      FlightLookupResult
+    >("GET", "/lookup/flight"),
+  },
   users: {
     me: endpoint<Record<string, never>, string | null>("GET", "/users/me"),
   },
@@ -209,11 +217,31 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   });
 }
 
+/**
+ * One request, with no cache consequences.
+ *
+ * `useMutation` is for writes: it invalidates every mounted query afterwards,
+ * because a write means what the client has is stale. A read-only lookup does
+ * not, and using the mutation hook for one would refetch the whole log every
+ * time somebody checked a flight number.
+ */
+export async function call<T>(ref: Endpoint<unknown, T>, args?: unknown): Promise<T> {
+  return request<T>(ref.method, ref.path, args);
+}
+
 async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
-  const response = await apiFetch(path, {
-    method,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  // A GET cannot carry a body — `fetch` throws before it reaches the network —
+  // so its arguments go in the query string. `useQuery` already built its own;
+  // this is the same rule for the direct-call path, which is how a GET reached
+  // from a click handler gets its arguments at all.
+  const isGet = method === "GET";
+  const response = await apiFetch(
+    isGet ? path + queryString((body ?? {}) as Record<string, unknown>) : path,
+    {
+      method,
+      body: isGet || body === undefined ? undefined : JSON.stringify(body),
+    },
+  );
 
   if (response.status === 204) return undefined as T;
 
@@ -256,7 +284,7 @@ function queryString(args: Record<string, unknown>): string {
 /* -------------------------------------------------------------------------
  * A tiny observable query cache
  *
- * Convex kept the server's state live for every component at once. Rather than
+ * Convex used to keep the server's state live for every component at once. Rather than
  * reimplement that over polling, components share one cache: a mutation clears
  * it, every mounted query notices and refetches. That keeps a single source of
  * truth, so the map, the list and the stats tiles can never disagree about
@@ -393,7 +421,7 @@ export function useMutation<TArgs, TResult>(
 /**
  * Polls while queries are mounted.
  *
- * This is what replaces Convex's push updates. The interval is deliberately
+ * This is what stands in for push updates. The interval is deliberately
  * unhurried: nothing in this app is written by anyone but the user sitting in
  * front of it, who already gets an immediate refetch from `invalidateQueries`.
  * The poll exists so a second tab — or a reload after an edit elsewhere —

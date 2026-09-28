@@ -38,7 +38,7 @@ what was attempted.
       a static bundle, the API a long-lived Node process, and the database
       scales to zero, so an idle free deployment costs nothing.
 - [x] **The database half is tested without a database** — `bun run check:api`
-      boots a Postgres in-process and drives the real routes, so 193 assertions
+      boots a Postgres in-process and drives the real routes, so 217 assertions
       cover the SQL on every CI run with no connection string.
 - [x] **Rating UI** — a 1–5 star control in the flight detail panel; clicking the
       current rating clears it.
@@ -97,8 +97,9 @@ the notes.
       would let an imperfect paste still land.
 - [ ] **Undo an import** — one bad batch is easy to delete a row at a time, but
       not easy to undo a hundred. Would want the batch to record an import id.
-- [ ] **Actual departure/arrival times and delay** — only meaningful with a
-      flight API.
+- [ ] **Actual departure/arrival times and delay** — the provider reports them,
+      but nothing stores them, so the gap is now the write path rather than the
+      data.
 
 ### Making the map worth looking at
 
@@ -138,11 +139,16 @@ the notes.
 
 - [ ] **Google and GitHub sign-in** — small, but removes most sign-up friction.
 - [ ] **Password reset** — needs an outbound email provider and a key.
-- [ ] **Aviation API integration** — an API route that queries a provider for
-      an exact flight and date, with the offline resolver as the fallback so the
-      app degrades gracefully when no key is configured. This is also what would
-      close the one remaining resolver gap: a flight number cannot be mapped to a
-      route offline, because OpenFlights has routes but not schedules.
+- [x] **Aviation API integration** — `GET /api/lookup/flight` queries a provider
+      for an exact flight and date, server-side, and fills the add-flight form
+      with what came back. The offline resolver is the fallback and stays the
+      whole experience when no key is configured. This closes the last resolver
+      gap: a flight number cannot be mapped to a route offline, because
+      OpenFlights has routes but not schedules. See
+      [environment-variables.md](environment-variables.md#live-flight-data).
+- [ ] **A second flight provider** — the interface is there and one file would
+      add it; the reason to is a free tier that runs out, or a different
+      schedule source.
 - [ ] **A test runner** — three runnable harnesses now run in CI (`bun run
       check`, covering the resolver, the CSV layer and the API), but there is no
       `bun test` and `parse.ts` deserves real assertions before it gets more

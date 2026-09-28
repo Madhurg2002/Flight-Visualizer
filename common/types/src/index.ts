@@ -204,6 +204,38 @@ export type ImportRowResult = {
   distanceKm: number | null;
 };
 
+/** A flight as a real provider reported it, rather than as the dataset guessed it. */
+export type FlightStatus =
+  | "scheduled"
+  | "active"
+  | "landed"
+  | "cancelled"
+  | "delayed"
+  | "diverted"
+  | "unknown";
+
+export type LiveFlight = {
+  status: FlightStatus;
+  /** Times are the airport's local time, `yyyy-mm-ddThh:mm`, never a coerced UTC. */
+  departure: { iata: string; terminal?: string; gate?: string; scheduledAt: string; actualAt?: string };
+  arrival: { iata: string; terminal?: string; gate?: string; scheduledAt: string; actualAt?: string };
+  aircraft?: string;
+  note?: string;
+};
+
+/**
+ * The answer to a live lookup.
+ *
+ * `configured: false` is a success, not a failure: the app works with no API
+ * key, and the client's correct response is to fall back to the offline
+ * resolver rather than to report an error.
+ */
+export type FlightLookupResult = {
+  configured: boolean;
+  provider: string | null;
+  flight: LiveFlight | null;
+};
+
 /** One row of a bulk paste: free text plus optional explicit overrides. */
 export type ImportRowInput = {
   text: string;
