@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { AuthorCredit, AuthorSection } from "../components/AuthorSection";
 import { GlobeOrbit, type OrbitRoute } from "../components/GlobeOrbit";
+import { LazyFlightMap } from "../components/LazyFlightMap";
 import { ProductPreview } from "../components/ProductPreview";
 import { ResolverDemo } from "../components/ResolverDemo";
 import { useAuth } from "../lib/auth";
+import { SAMPLE_FLIGHTS } from "../lib/sampleFlights";
 import { ThemeToggle } from "../lib/theme";
 import { Button } from "@skytrace/ui";
 import {
@@ -124,7 +126,10 @@ export function LandingPage() {
               </Button>
             ) : (
               <>
-                <Button asChild variant="ghost" size="sm">
+                {/* Three buttons do not fit a 375px masthead, and the extra
+                    width pushed the whole page sideways. "See the map" is the
+                    one to drop: the hero carries the same link, twice over. */}
+                <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
                   <Link to="/dashboard">See the map</Link>
                 </Button>
                 <Button asChild variant="ghost" size="sm">
@@ -243,19 +248,36 @@ export function LandingPage() {
               </motion.dl>
             </div>
 
-            {/* Plate 1: the globe, framed and captioned like a chart plate. */}
+            {/* Plate 1: the real map, framed and captioned like a chart plate.
+                It draws the same sample log a signed-out visitor gets on the
+                dashboard, so the headline above it is describing the thing
+                directly underneath it rather than a picture of the thing. */}
             <motion.figure
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.7, delay: 0.1 }}
-              className="panel ticks relative mx-auto w-full max-w-[480px] p-6"
+              className="panel ticks relative mx-auto w-full max-w-[520px] p-2.5"
             >
-              <GlobeOrbit routes={ORBITS} size={420} className="w-full" />
-              <figcaption className="mt-4 flex items-baseline justify-between gap-3 border-t border-paper-300 pt-3">
+              <LazyFlightMap
+                flights={SAMPLE_FLIGHTS}
+                className="aspect-[4/5] w-full overflow-hidden rounded-sm sm:aspect-[5/4] lg:aspect-[4/5]"
+                placeholder={
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-4">
+                    <GlobeOrbit routes={ORBITS} size={380} className="w-full max-w-[380px]" />
+                    <p className="flex items-center gap-2 font-mono text-[10px] tracking-[0.14em] text-ink-400 uppercase">
+                      <span className="size-1.5 animate-pulse rounded-full bg-chart-600" />
+                      Drawing the map
+                    </p>
+                  </div>
+                }
+              />
+              <figcaption className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-paper-300 pt-3">
                 <span className="font-mono text-[10px] tracking-[0.14em] text-chart-600 uppercase">
-                  Plate 1 — great-circle routes
+                  Plate 1 — the map itself
                 </span>
-                <span className="font-mono text-[10px] text-ink-400">orthographic</span>
+                <span className="font-mono text-[10px] text-ink-400">
+                  {SAMPLE_FLIGHTS.length} flights · sample log
+                </span>
               </figcaption>
             </motion.figure>
           </div>

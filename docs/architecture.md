@@ -234,9 +234,24 @@ in a React component pulled the whole dataset into the client bundle. The
 backend imports the `/server` entry point; nothing in `src/` does.
 
 The map itself is a third, lazy chunk. deck.gl and MapLibre are 1.9MB between
-them and only the dashboard renders a map — the landing page uses a
-hand-drawn SVG globe — so `FlightMap` is `React.lazy` and the map vendor chunk
-is never fetched by a visitor who has not signed in.
+them, so `FlightMap` is `React.lazy` everywhere it appears and the map vendor
+chunk is fetched only when a map is actually rendered. Keeping it out of the
+landing page's first paint took two things, not one:
+
+- `LazyFlightMap` holds the import behind an `IntersectionObserver` *and* a
+  `requestIdleCallback`, so the hero paints its headline, copy and calls to
+  action first and the map swaps in afterwards over the SVG globe that was
+  there anyway. `React.lazy` on its own is not enough in a hero: the section
+  is guaranteed to be on screen, so the chunk would be requested while the
+  browser was still trying to render the words.
+- Nothing may reference the map chunk from `index.html`. `React.lazy` is a
+  promise about the bundle, and a `modulepreload` or a stylesheet link breaks
+  it silently. This was not hypothetical: Vite's dynamic-import helper was
+  being folded into the map chunk, which made the entry chunk import 1.9MB
+  statically and put a `modulepreload` for it in every page's HTML. CI asserts
+  `index.html` is free of the map chunk, and MapLibre's stylesheet is imported
+  by `FlightMap.tsx` rather than the entry point so it arrives with the map
+  instead of in the one stylesheet every page loads.
 
 ### Derived values are snapshotted
 

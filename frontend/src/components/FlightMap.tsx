@@ -8,6 +8,11 @@ import { Map as MapLibreMap } from "react-map-gl/maplibre";
 import type { MapRef } from "react-map-gl/maplibre";
 import type { FlightLogWithAirports } from "@skytrace/types";
 import { cn } from "@skytrace/ui";
+// MapLibre's stylesheet belongs to this chunk, not to the app. Imported in the
+// entry point it lands in the one stylesheet every page loads — including the
+// marketing pages, which have no map until long after first paint. The build
+// emits it alongside this chunk, so it arrives with the map and not before.
+import "maplibre-gl/dist/maplibre-gl.css";
 import { formatDate, formatDistance, interpolate } from "@skytrace/flight-core";
 import { Camera, Download, Pause, Play, RotateCcw } from "lucide-react";
 import { getBasemap, toMapLibreStyle, type BasemapId } from "../lib/mapStyles";
