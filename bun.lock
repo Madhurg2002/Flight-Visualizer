@@ -15,11 +15,54 @@
         "typescript": "^5.7.3",
       },
     },
-    "apps/web": {
-      "name": "@skytrace/web",
+    "backend": {
+      "name": "@skytrace/backend",
       "version": "0.1.0",
       "dependencies": {
         "@auth/core": "^0.41.1",
+        "@convex-dev/auth": "^0.0.95",
+        "convex": "^1.46.0",
+      },
+    },
+    "common/data": {
+      "name": "@skytrace/data",
+      "version": "0.1.0",
+    },
+    "common/flight-core": {
+      "name": "@skytrace/flight-core",
+      "version": "0.1.0",
+      "dependencies": {
+        "@skytrace/types": "workspace:*",
+      },
+    },
+    "common/types": {
+      "name": "@skytrace/types",
+      "version": "0.1.0",
+    },
+    "common/ui": {
+      "name": "@skytrace/ui",
+      "version": "0.1.0",
+      "dependencies": {
+        "@radix-ui/react-label": "^2.1.2",
+        "@radix-ui/react-slot": "^1.1.2",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "lucide-react": "^0.475.0",
+        "tailwind-merge": "^3.0.2",
+      },
+      "devDependencies": {
+        "@types/react": "^19.0.10",
+        "react": "^19.0.0",
+        "typescript": "^5.7.3",
+      },
+      "peerDependencies": {
+        "react": "^19.0.0",
+      },
+    },
+    "frontend": {
+      "name": "@skytrace/frontend",
+      "version": "0.1.0",
+      "dependencies": {
         "@convex-dev/auth": "^0.0.95",
         "@deck.gl/core": "^9.4.0",
         "@deck.gl/layers": "^9.4.0",
@@ -56,41 +99,6 @@
         "tailwindcss": "^4.0.9",
         "typescript": "^5.7.3",
         "vite": "^6.2.0",
-      },
-    },
-    "packages/data": {
-      "name": "@skytrace/data",
-      "version": "0.1.0",
-    },
-    "packages/flight-core": {
-      "name": "@skytrace/flight-core",
-      "version": "0.1.0",
-      "dependencies": {
-        "@skytrace/types": "workspace:*",
-      },
-    },
-    "packages/types": {
-      "name": "@skytrace/types",
-      "version": "0.1.0",
-    },
-    "packages/ui": {
-      "name": "@skytrace/ui",
-      "version": "0.1.0",
-      "dependencies": {
-        "@radix-ui/react-label": "^2.1.2",
-        "@radix-ui/react-slot": "^1.1.2",
-        "class-variance-authority": "^0.7.1",
-        "clsx": "^2.1.1",
-        "lucide-react": "^0.475.0",
-        "tailwind-merge": "^3.0.2",
-      },
-      "devDependencies": {
-        "@types/react": "^19.0.10",
-        "react": "^19.0.0",
-        "typescript": "^5.7.3",
-      },
-      "peerDependencies": {
-        "react": "^19.0.0",
       },
     },
   },
@@ -503,15 +511,17 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.63.5", "", { "os": "win32", "cpu": "x64" }, "sha512-ypfC34F3RKXvCXBglGqGMsUSMKlgwd1HX9AOAlx9RoZZ6GaI42YHVeKpzg3JG+wpBUJYTG+NNZhqbDWL8tBZkw=="],
 
-    "@skytrace/data": ["@skytrace/data@workspace:packages/data"],
+    "@skytrace/backend": ["@skytrace/backend@workspace:backend"],
 
-    "@skytrace/flight-core": ["@skytrace/flight-core@workspace:packages/flight-core"],
+    "@skytrace/data": ["@skytrace/data@workspace:common/data"],
 
-    "@skytrace/types": ["@skytrace/types@workspace:packages/types"],
+    "@skytrace/flight-core": ["@skytrace/flight-core@workspace:common/flight-core"],
 
-    "@skytrace/ui": ["@skytrace/ui@workspace:packages/ui"],
+    "@skytrace/frontend": ["@skytrace/frontend@workspace:frontend"],
 
-    "@skytrace/web": ["@skytrace/web@workspace:apps/web"],
+    "@skytrace/types": ["@skytrace/types@workspace:common/types"],
+
+    "@skytrace/ui": ["@skytrace/ui@workspace:common/ui"],
 
     "@tailwindcss/node": ["@tailwindcss/node@4.3.3", "", { "dependencies": { "@jridgewell/remapping": "^2.3.5", "enhanced-resolve": "^5.24.1", "jiti": "^2.7.0", "lightningcss": "1.32.0", "magic-string": "^0.30.21", "source-map-js": "^1.2.1", "tailwindcss": "4.3.3" } }, "sha512-/T8IKEsf9VTU6tLjgC7+sv2mOPtQxzE2jMw7u4Tt40Tx+QSZxpzh95/H6cMKoja9XuW7iMdLJYBB0o9G1CaAgg=="],
 

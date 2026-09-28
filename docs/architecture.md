@@ -4,29 +4,39 @@
 
 ```
 skytrace/
-├── apps/
-│   └── web/                     Vite + React app, and the Convex backend
-│       ├── convex/              Backend functions (also the source of codegen)
-│       │   ├── _generated/      Convex codegen output — never edit
-│       │   ├── schema.ts        Tables and indexes
-│       │   ├── auth.ts          Convex Auth: password provider
-│       │   ├── flights.ts       List, add, update, remove, stats
-│       │   ├── resolve.ts       The resolver query (the only place routes load)
-│       │   ├── trips.ts         Trip grouping
-│       │   ├── users.ts         Current user's email
-│       │   └── http.ts          Convex Auth HTTP routes
-│       └── src/                 Frontend
-│           ├── components/      Map, list, panels, globe
-│           ├── lib/             Convex client, auth wrapper, basemap registry
-│           └── pages/           Landing, auth, dashboard
-└── packages/
+├── backend/                     Everything that runs on the server
+│   ├── convex/                  Convex functions (also the source of codegen)
+│   │   ├── _generated/          Convex codegen output — never edit
+│   │   ├── schema.ts            Tables and indexes
+│   │   ├── auth.ts              Convex Auth: password provider
+│   │   ├── flights.ts           List, add, update, remove, stats
+│   │   ├── resolve.ts           The resolver query (the only place routes load)
+│   │   ├── trips.ts             Trip grouping
+│   │   ├── users.ts             Current user's email
+│   │   └── http.ts              Convex Auth HTTP routes
+│   └── scripts/                 watch-packages.ts
+├── frontend/                    Everything the browser runs
+│   ├── index.html
+│   ├── vite.config.ts
+│   ├── scripts/                 check-csv.ts
+│   └── src/
+│       ├── components/          Map, list, panels, globe
+│       ├── lib/                 Convex client, auth, theme, basemap registry
+│       └── pages/               Landing, auth, dashboard
+└── common/                      Code both sides import
     ├── types/                   Domain types, no runtime dependencies
     ├── flight-core/             Pure logic: geometry, parser, resolver, emissions
     ├── data/                    Generated aviation datasets + lookups
     └── ui/                      Button, Input, Label, Select, Textarea
 ```
 
-## The four shared packages
+`backend` and `frontend` are the two halves of the app and are named for
+what they are, so it is obvious at a glance which side a file belongs to.
+`common` holds the four packages that both halves import. Nothing crosses
+backwards: `backend` never imports from `frontend`, and `common` never
+imports from either.
+
+## The four common packages
 
 **`types`** holds the domain model — `FlightLog`, `FlightCandidate`,
 `FlightStats` — with no runtime dependencies at all, so both the Convex
@@ -86,29 +96,58 @@ over HTTPS. Left alone, the frontend would be a beautiful page that could not
 query anything.
 
 So Vite proxies `/api` and `/.well-known` through to the Convex deployment
-(`apps/web/vite.config.ts`), and the app always constructs its Convex client from
+(`frontend/vite.config.ts`), and the app always constructs its Convex client from
 `window.location.origin`. One code path in the app, correct in both places.
 
 The preview command runs `convex dev` alongside Vite, because
 `convex dev --once` starts a local backend, pushes, and exits — leaving nothing
 listening. A third process watches the shared packages, because `convex dev`
 only watches its own functions directory and would otherwise serve stale
-resolver code after an edit in `packages/flight-core`.
+resolver code after an edit in `common/flight-core`.
 
 ### Convex codegen and a monorepo
 
 Convex's bundler resolves the real path behind a workspace symlink and then
 cannot find sibling packages from there, because the packages resolve upward
-from `packages/`, not from `apps/web/node_modules`. The fix is to declare the
+from `common/`, not from `frontend/node_modules`. The fix is to declare the
 workspace packages as dependencies of the **root** `package.json` as well, so
 `<root>/node_modules/@skytrace/*` exists. That one change is what lets the
 backend bundle `flight-core`, `data` and the 680KB route table.
 
-A related trap: `convex dev` watches only `apps/web/convex`. The interesting
-code is in `packages/`, so editing the resolver produces no re-push and the
-deployment quietly serves the previous version. `apps/web/scripts/watch-packages.ts`
+A related trap: `convex dev` watches only `backend/convex`. The interesting
+code is in `common/`, so editing the resolver produces no re-push and the
+deployment quietly serves the previous version. `backend/scripts/watch-packages.ts`
 closes the gap by touching a file in the functions directory when a package
 changes.
+
+### Light and dark are one stylesheet, not two
+
+The palette lives in `frontend/src/index.css` as plain custom properties
+(`--paper-50`, `--ink-500`, `--chart-600`, …) declared twice: once on `:root`
+for the printed sheet, once on `.dark` for the same chart at night. A single
+`@theme inline` block points Tailwind's colour utilities at those variables.
+
+`@theme inline` rather than plain `@theme` is the whole trick. A normal
+`@theme` **bakes each value into the utility** — `bg-paper-100/40` compiles
+down to a literal `#fdfbf666` — so any colour used with an alpha modifier
+could never follow a runtime switch. Inlining keeps the utility as
+`color-mix(in oklab, var(--paper-100) 40%, transparent)`, which resolves when
+it is painted. Every `/opacity` usage in the app therefore themes for free,
+and there is not a single `dark:` variant class in the codebase.
+
+Dark mode keys off a class on `<html>`, not the media query, so the header
+toggle can override what the operating system asks for. A short inline script
+in `index.html` applies the stored choice *before first paint*; doing it from
+React instead means the page paints in the default theme and then visibly
+swaps on every load.
+
+The dark palette is not the light one with the brightness pulled down. On
+paper the prominent end of each scale is the dark end, so `chart-700` is the
+deepest magenta; on a dark sheet the prominent end is the light one, so the
+night values run the other way and `chart-700` is the brightest. Both
+palettes were checked against every surface they are actually used on —
+body text, headings, muted text, the primary button, tinted chips, the
+eyebrow and the headline gradient — and both clear WCAG AA.
 
 ### Two entry points into `flight-core`
 

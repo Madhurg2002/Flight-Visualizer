@@ -12,12 +12,12 @@ anything if the routes on it are real.
 
 | Piece | File |
 | --- | --- |
-| Free-text → structured input | `packages/flight-core/src/parse.ts` |
-| Structured input → ranked candidates | `packages/flight-core/src/resolve.ts` |
-| Geography and emissions | `packages/flight-core/src/geo.ts`, `emissions.ts` |
-| Vocabulary lookups | `packages/data/src/index.ts` |
-| Convex entry point | `apps/web/convex/resolve.ts` |
-| Test harness | `packages/flight-core/scripts/parse-check.ts` |
+| Free-text → structured input | `common/flight-core/src/parse.ts` |
+| Structured input → ranked candidates | `common/flight-core/src/resolve.ts` |
+| Geography and emissions | `common/flight-core/src/geo.ts`, `emissions.ts` |
+| Vocabulary lookups | `common/data/src/index.ts` |
+| Convex entry point | `backend/convex/resolve.ts` |
+| Test harness | `common/flight-core/scripts/parse-check.ts` |
 
 Both halves are pure functions. `resolveFlight` takes a parse result plus its
 dependencies and returns a `ResolveResult`. Nothing is imported from Convex or
@@ -118,7 +118,7 @@ presenting an empty form.
 Run the harness before and after:
 
 ```bash
-bun run packages/flight-core/scripts/parse-check.ts
+bun run common/flight-core/scripts/parse-check.ts
 ```
 
 It prints the parse and the top candidates for thirteen inputs, including the
