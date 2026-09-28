@@ -2,13 +2,13 @@ import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from "re
 import { apiFetch, invalidateQueries } from "./api";
 
 /**
- * Sign-in state, replacing Convex Auth.
+ * Sign-in state, over an ordinary session cookie.
  *
  * The exports are the same ones the app already used — `useAuth`,
  * `usePasswordAuth`, `useSignOut`, `signInHref` — so the header, the auth page
- * and the dashboard needed no changes. What is underneath is now an ordinary
- * session cookie: the browser holds a signed-in cookie set by the server on
- * `/api/auth/signin`, and `/api/users/me` says who it belongs to.
+ * and the dashboard needed no changes. What is underneath is a cookie: the
+ * browser holds a session set by the server on `/api/auth/signin`, and
+ * `/api/users/me` says who it belongs to.
  *
  * There is no token in JavaScript and no token in `localStorage`, so an XSS
  * cannot read the session — the cookie is `HttpOnly` and the only thing this

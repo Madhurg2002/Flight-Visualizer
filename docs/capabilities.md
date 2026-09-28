@@ -137,7 +137,10 @@ means adding a real-time flight API; see [roadmap.md](roadmap.md).
 | Resolver test harness | **Shipped** | `bun run check:resolver` |
 | CSV import/export checks | **Shipped** | `bun run check:csv` — 34 assertions over dates, header mapping and round-tripping |
 | CI on every push and PR | **Shipped** | Typecheck, both harnesses, a production build, and an assertion that the airport dataset never reached the client bundle |
-| Unit tests | **Partial** | Two runnable harnesses in CI; no test runner (`bun test`) yet |
+| Unit tests | **Partial** | Two assertion harnesses in CI plus a resolver harness you read by eye; no test runner (`bun test`) yet |
+| API tested against a real Postgres | **Shipped** | `bun run check:api` drives the real routes in-process, 170 assertions |
+| Schema applied on boot | **Shipped** | `start` runs `db:push` first, so a deploy has no release step |
+| Split deployment | **Shipped** | Frontend, API and database on three hosts; two environment variables |
 | Offline resolver | **Shipped** | Needs no third-party API to function |
 | Aviation API hook | **Planned** | Designed, not implemented |
 | Snapshot semantics for saved flights | **Shipped** | Distance/duration/CO₂ are stored, not re-derived |

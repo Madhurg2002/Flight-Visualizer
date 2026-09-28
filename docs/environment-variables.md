@@ -1,6 +1,8 @@
 # Environment variables
 
-The app reads exactly one variable. Everything else is derived.
+The app reads one variable it cannot run without, and two more that only matter
+when the frontend and the API are on different hosts — which is how it is
+deployed now. Everything else is derived.
 
 | Variable | Where | Required | What it is |
 | --- | --- | --- | --- |
@@ -38,8 +40,13 @@ local database, a container, or a managed one are all the same code.
 
 ### When it is missing
 
-The app still starts, and this is deliberate. `/api/health` reports
-`{"database":"missing"}`, and anything that needs a session answers with:
+The app still starts, and this is deliberate. `/api/health` says so:
+
+```json
+{"ok":true,"database":"missing","remedy":"Set DATABASE_URL."}
+```
+
+and anything that needs a session answers with a 500 naming it:
 
 > DATABASE_URL is not set. Point it at a Postgres connection string, then run
 > `bun run db:push` to create the tables.
@@ -52,8 +59,13 @@ button, rather than a blank page and a stack trace.
 The one thing to check first when nobody can sign in is:
 
 ```bash
-curl -s https://your-deployment.example/api/health
+curl -s https://your-api-host.example/api/health
 ```
+
+`ready` means the connection works. `no-tables` means it works but the schema
+has not been applied, and the response carries the command to run. `missing`
+means the variable is not set. `unreachable` means the host cannot be reached
+at all — DNS, TLS, or a suspended database.
 
 ## Running the frontend and API on different hosts
 
@@ -93,15 +105,47 @@ otherwise appear to succeed and then forget you on the next page.
 
 ### Checking it worked
 
+Two failures, two different curls. The preflight tells you whether the API is
+willing to be called from the frontend's origin at all:
+
 ```bash
-curl -s https://flight-visualizer.onrender.com/api/health
+curl -s -i -X OPTIONS https://flight-visualizer.onrender.com/api/auth/signup \
+  -H "Origin: https://flight-visualizer-frontend-cyan.vercel.app" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,x-skytrace-client"
 ```
 
-Then, from a browser signed out, the sign-in button on the deployed frontend
-should create an account. If it fails, the two variables above are the first
-thing to compare against what the browser actually sent — the **Network** tab
-shows the `Origin` the request carried, and whether the response had an
-`Access-Control-Allow-Origin` header.
+A `204` with `access-control-allow-origin` and
+`access-control-allow-credentials: true` means `ALLOWED_ORIGINS` is right. A
+`403` with no CORS header at all means it is not — and the browser would have
+blocked the response without saying why.
+
+Then a sign-in, which is a read as far as the database is concerned and tells
+you whether the tables exist:
+
+```bash
+curl -s -X POST https://flight-visualizer.onrender.com/api/auth/signin \
+  -H 'content-type: application/json' \
+  -d '{"email":"nobody@example.invalid","password":"x"}'
+```
+
+`401` means the query ran. A `503` naming `db:push` means the schema is missing
+— nothing is written either way.
+
+From a browser signed out, the sign-in button on the deployed frontend should
+then create an account. If it still fails, compare the two variables above
+against what the browser actually sent: the **Network** tab shows the `Origin`
+the request carried and whether the response had an `Access-Control-Allow-Origin`
+header.
+
+### The write needs one more header
+
+`ALLOWED_ORIGINS` stops a hostile site *reading* this user's log. It does
+nothing to stop a hostile site *writing* to it, because any site can send a
+request that carries the user's cookie — it just cannot read the reply. So a
+cross-origin write must also carry `x-skytrace-client: 1`, which forces a
+preflight that a plain HTML form post cannot produce. See
+`backend/server/cors.ts`.
 
 ## Creating the tables
 

@@ -1,5 +1,5 @@
 /**
- * Domain types shared between the Convex backend and the React app.
+ * Domain types shared between the API and the React app.
  * Keep this package free of runtime dependencies so both sides can import it.
  */
 
@@ -73,7 +73,7 @@ export type ResolveResult = {
   };
 };
 
-/** A flight the user has logged. Mirrors the `flights` Convex table. */
+/** A flight the user has logged. Mirrors the `flights` table. */
 export type FlightLog = {
   id: string;
   airlineCode: string | null;

@@ -8,7 +8,7 @@ skytrace/
 │   ├── db/
 │   │   ├── schema.ts            Tables, indexes and enums (Drizzle)
 │   │   ├── client.ts            The Postgres connection
-│   │   └── migrations/          SQL, when a change is reviewed before it lands
+│   │   └── migrations/          Written by `db:generate`; not committed
 │   ├── server/
 │   │   ├── router.ts            The routing table and error handling
 │   │   ├── http.ts              JSON, cookies, argument reading, date checking
@@ -113,17 +113,31 @@ It also lives in `backend/server/` rather than in `api/`, because Vercel builds
 there is not a helper, it is a second function with no default export, and the
 build fails on it. `api/` therefore contains exactly one file.
 
-### The API and the app share one origin
+### The client has one base URL, and it is empty by default
 
-In production both are served from the same deployment, so the browser calls
-`/api/...` on its own origin and the session cookie is an ordinary same-origin
-cookie. In development the API is a separate process, so Vite proxies `/api` to
-it (`frontend/vite.config.ts`) and the client still sees one origin.
+`frontend/src/lib/api.ts` resolves every request against `apiBase`, which is
+`VITE_API_URL` when it is set and `""` when it is not. An empty base means
+"my own origin", which is right in two of the three arrangements this app runs
+in: the Vite dev server proxies `/api` to the API process
+(`frontend/vite.config.ts`), and a single Vercel deployment serves the static
+frontend and the `api/[...path].ts` function together. The client is the same
+code in both; nothing branches on where it is running.
 
-That symmetry is deliberate: the alternative — an absolute API URL baked into
-the client — is a second configuration that can be right in development and
-wrong in production, and it would need CORS. There is no API base URL in the
-client, and no environment variable controlling one.
+The third arrangement is a real deployment with the frontend and the API on
+different hosts, and that is how it is deployed now. It costs two variables
+rather than a code change: `VITE_API_URL` on the frontend, read at build time,
+and `ALLOWED_ORIGINS` on the API. `apiFetch` is the one place that knows which
+case it is in — it sets `credentials: "include"` when the base is a different
+origin from the page, and always stamps `x-skytrace-client`. The session cookie
+follows the same signal, becoming `SameSite=None; Secure`: a `Lax` cookie is
+never sent cross-site, so without that sign-in would appear to work and then
+forget you on the next page.
+
+That header is not decoration. An allowlist stops a hostile site *reading* the
+log, but any site can send a request carrying the cookie; it cannot read the
+reply. Requiring a header on writes forces a preflight that an HTML form post
+cannot produce, so the allowlist stops a third party both ways. See
+[environment-variables.md](environment-variables.md).
 
 ### Talking to Postgres over HTTP
 
@@ -256,7 +270,7 @@ the [roadmap](roadmap.md#accounts-and-infrastructure).
 | Routing | React Router 7 |
 | Backend | Bun / Node HTTP, no framework |
 | Database | Postgres via Drizzle ORM |
-| Hosting | Vercel Functions over [Neon](https://neon.tech) Postgres |
+| Hosting | Static frontend on Vercel, API on Render, [Neon](https://neon.tech) Postgres. `api/` can serve both from one origin instead |
 | Auth | Sessions in an `HttpOnly` cookie, scrypt password hashing |
 | Map rendering | deck.gl 9 over MapLibre GL 5 |
 | Basemaps | Keyless public tiles — see [map-tiles.md](map-tiles.md) |

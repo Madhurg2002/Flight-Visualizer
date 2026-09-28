@@ -5,7 +5,6 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@convex/*": ["../backend/convex/*"],
       "@skytrace/types": ["../common/types/src/index.ts"],
       "@skytrace/data": ["../common/data/src/index.ts"],
       "@skytrace/data/routes.generated": ["../common/data/src/routes.generated.ts"],
@@ -14,5 +13,5 @@
       "@skytrace/ui": ["../common/ui/src/index.ts"]
     }
   },
-  "include": ["src", "../backend/convex", "vite.config.ts"]
+  "include": ["src", "vite.config.ts"]
 }

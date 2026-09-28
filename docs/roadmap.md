@@ -34,11 +34,11 @@ what was attempted.
       detection that offers rather than blocks.
 - [x] **Free keyless basemaps** — OpenFreeMap (three styles), CARTO (two) and
       Esri satellite, switchable in-app with attribution rendered on the map.
-- [x] **Postgres on Neon, deployed to Vercel** — the API runs as a serverless
-      function and the database scales to zero, so a free deployment has no
-      idle cost and no ephemeral-storage data loss.
+- [x] **Postgres on Neon, deployed across Vercel and Render** — the frontend is
+      a static bundle, the API a long-lived Node process, and the database
+      scales to zero, so an idle free deployment costs nothing.
 - [x] **The database half is tested without a database** — `bun run check:api`
-      boots a Postgres in-process and drives the real routes, so 104 assertions
+      boots a Postgres in-process and drives the real routes, so 170 assertions
       cover the SQL on every CI run with no connection string.
 - [x] **Rating UI** — a 1–5 star control in the flight detail panel; clicking the
       current rating clears it.
@@ -151,7 +151,8 @@ the notes.
       server, which is correct, but it does mean a keystroke is a round trip.
       Worth revisiting only if it feels slow in practice; the alternative ships
       1.2MB to every visitor.
-- [x] **A real deployment** — Vercel Functions plus Neon Postgres; see
+- [x] **A real deployment** — Vercel for the frontend, Render for the API, Neon
+      Postgres behind both; see
       [getting-started.md](getting-started.md#deploying).
 
 ### The largest single piece of work left

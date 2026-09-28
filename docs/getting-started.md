@@ -43,6 +43,10 @@ second, because hosts disagree about which of those they inject. It is the
 command a deployment platform's "start command" field should hold, and the same
 code the Vercel function runs.
 
+It also runs `db:push` first, so a host does not need a release step to create
+the tables — see [environment-variables.md](environment-variables.md#creating-the-tables)
+for what that does and does not do.
+
 `bun start` and `node server/start.ts` are the same thing — the script is
 plain `node:http`, so either runtime serves it.
 
@@ -70,14 +74,14 @@ Run from the repository root.
 | `bun run dev` | API and frontend together — the normal way to work |
 | `bun run web` | Frontend only, if the API is already running |
 | `bun run api` | API only |
-| `cd backend && bun start` | The API as a plain Node server, without hot reload — what a host runs |
+| `bun run start` | The API as a plain Node server, without hot reload, applying the schema first — what a host runs. `cd backend && bun start` is the same thing |
 | `bun run build` | Production build into `frontend/dist` |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
 | `bun run data:build` | Regenerate the aviation datasets from `common/data/raw/` |
 | `bun run check` | Run the three harnesses below — the fastest confidence check in the repo |
 | `bun run check:resolver` | Resolver harness: parse and top candidates for a spread of inputs |
 | `bun run check:csv` | 34 assertions over CSV dates, header mapping and round-tripping |
-| `bun run check:api` | 104 assertions over the real API, against an in-process Postgres |
+| `bun run check:api` | 170 assertions over the real API, against an in-process Postgres |
 | `bun run db:push` | Create or update the tables from `backend/db/schema.ts` |
 | `bun run db:generate` | Write a reviewable SQL migration instead of applying it directly |
 
@@ -113,9 +117,20 @@ typecheck cleanly; this is what catches it.
 
 ## How the browser reaches the API
 
-The browser only ever talks to its own origin. In development Vite proxies
-`/api` to the API process; in production one deployment serves both. The
-client has no API URL to configure, and no environment variable controls one.
+There are two arrangements, and the client is written to work in both.
+
+**One origin.** In development Vite proxies `/api` to the API process, and a
+single Vercel deployment serves the static frontend and the `api/[...path].ts`
+function together. The browser calls `/api/...` on its own origin and there is
+no API URL to configure at all.
+
+**Split across hosts.** The app is currently deployed that way: the frontend on
+Vercel, the API on Render. Two variables switch it on, and the client reads
+`VITE_API_URL` at build time — see
+[environment-variables.md](environment-variables.md#running-the-frontend-and-api-on-different-hosts)
+for both of them and for what breaks if only one is set. Requests then carry the
+session cookie cross-origin, which is why the API also needs to be told which
+origins may call it.
 
 To see what the API itself thinks:
 
@@ -123,9 +138,12 @@ To see what the API itself thinks:
 curl -s localhost:3210/api/health
 ```
 
-`{"ok":true,"database":"configured"}` means everything is wired up.
-`"database":"missing"` means the connection string is not set, and it is the
-reason sign-in does nothing.
+| `database` | What it means |
+| --- | --- |
+| `ready` | Connected, and a query round-tripped |
+| `no-tables` | Connected, but the schema has not been applied — the response carries `remedy` |
+| `unreachable` | Cannot reach it at all — DNS, TLS, a suspended branch |
+| `missing` | `DATABASE_URL` is not set, and it is the reason sign-in does nothing |
 
 ## Troubleshooting
 
@@ -142,13 +160,22 @@ A `200` means the provider is fine and the problem is in the layer setup. See
 missing connection string. Check `/api/health` first — the error message names
 the variable and the command to run.
 
-**"relation \"flights\" does not exist".** The schema has not been created. Run
-`bun run db:push`.
+**"The database is reachable but the tables have not been created."** The
+schema has not been applied. `start` does this for you, so this means the
+service booted without the push — check the deploy log, then run
+`bun run db:push` against the same `DATABASE_URL` by hand.
+
+**Sign-in fails only on the deployed site, and the console shows a CORS
+error.** The frontend and the API are on different hosts, so `ALLOWED_ORIGINS`
+on the API and `VITE_API_URL` on the frontend both have to be set — and the
+latter needs a redeploy. See
+[environment-variables.md](environment-variables.md#running-the-frontend-and-api-on-different-hosts).
 
 **An API request returns 500 with an unfamiliar message.** The server logs the
 real error; the client is only told something went wrong, deliberately, because
 an unexpected error's message usually contains a query or a file path. Run the
-API in the foreground and read its output.
+API in the foreground and read its output. A database problem is the exception:
+those are recognised and answered with the one thing to do next, as a 503.
 
 **"Address already in use" on port 3210.** An orphaned API from an earlier
 session is still holding the port. Find it with `ss -ltnp | grep 3210`, then
@@ -156,18 +183,35 @@ stop that process.
 
 ## Deploying
 
-The app deploys as one unit on Vercel: `vercel.json` builds the static frontend
-and serves the API from `api/[...path].ts`, both on one origin. The database is
-[Neon](https://neon.tech) Postgres, which is serverless and scales to zero, so
-nothing is left running when the app is not.
+The current deployment is three pieces, because each is best served by
+something that does that one thing well:
+
+| Piece | Where | Why there |
+| --- | --- | --- |
+| Frontend | Vercel | A static bundle. It is `dist/` and nothing else. |
+| API | Render | A long-lived Node process, which is what `start` is. |
+| Database | [Neon](https://neon.tech) Postgres | Serverless; scales to zero, so an idle app costs nothing. |
 
 1. Create a Neon project and copy its connection string.
-2. Push the repository to Vercel and set `DATABASE_URL` in the project's
-   environment settings.
+2. Deploy the repository to Render as a Node service. Build command
+   `bun install`, start command `bun run start`, and `DATABASE_URL` in the
+   service's environment. `start` applies the schema before the server binds
+   its port, so there is no release step.
+3. Deploy the repository to Vercel. `vercel.json` builds the static frontend
+   and serves the API from `api/[...path].ts`.
+4. Because the two are now on different hosts, set `ALLOWED_ORIGINS` on Render
+   and `VITE_API_URL` on Vercel — and redeploy Vercel, because that one is read
+   at build time.
 
-That is the whole list. There is no auth provider to configure, no signing key
-to generate, and no migration step that has to run on every deploy: `start`
-applies the schema itself before the server binds its port.
+There is no auth provider to configure and no signing key to generate. Step 4
+is the only part that is easy to get wrong, and it fails *silently*: the
+browser discards a response it is not allowed to read, so the app looks merely
+broken rather than reporting a CORS error. See
+[environment-variables.md](environment-variables.md#running-the-frontend-and-api-on-different-hosts),
+which has the exact curl to tell the two settings apart.
+
+One deployment can serve both halves on one origin — the `api/` function is
+there for exactly that — and steps 3–4 are what you skip if you want it.
 
 ### One project setting that is easy to get wrong
 

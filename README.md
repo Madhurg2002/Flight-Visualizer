@@ -61,7 +61,7 @@ More, including troubleshooting, is in
 
 ```
 backend/     The API: routes, sessions, and the Postgres schema
-api/         The serverless function entry point that serves those routes
+api/         The optional single-origin serverless entry point for those routes
 frontend/    The Vite + React app the browser runs
 common/      types, flight-core, data and ui — imported by both halves
 docs/        The documentation below
@@ -92,7 +92,8 @@ Every document is written to be read by someone who did not build it.
 
 Bun workspaces, Vite 6, React 19, TypeScript, Tailwind CSS v4, Postgres via
 Drizzle ORM over Neon's serverless driver, deck.gl 9 over MapLibre GL 5,
-React Router 7. Deployed to Vercel.
+React Router 7. Deployed as three pieces: the static frontend on Vercel, the
+API on Render, Neon Postgres behind both.
 
 ## Two things worth knowing up front
 

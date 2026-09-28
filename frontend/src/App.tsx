@@ -21,8 +21,8 @@ import { LandingPage } from "./pages/LandingPage";
 function Dashboard() {
   const { isLoading, isAuthenticated } = useAuth();
 
-  // Replaces the push updates Convex used to send: while any query is mounted,
-  // the shared cache revalidates on an interval so a second tab converges.
+  // While any query is mounted, the shared cache revalidates on an interval, so
+  // a second tab converges on the same log.
   useQueryPolling();
 
   if (isLoading) {

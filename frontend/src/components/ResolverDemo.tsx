@@ -23,7 +23,7 @@ const CONFIDENCE_STYLE: Record<MatchConfidence, string> = {
 /**
  * The resolver running for real, on the landing page.
  *
- * It is deliberately not a video or a mock-up: the same Convex query the
+ * It is deliberately not a video or a mock-up: the same resolve endpoint the
  * dashboard uses answers these, signed out, so the first thing a visitor sees
  * is the actual feature working.
  */
