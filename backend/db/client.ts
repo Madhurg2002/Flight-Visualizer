@@ -69,8 +69,16 @@ export function isDatabaseConfigured(): boolean {
  *
  * `select 1` is one round trip, and on Neon's HTTP driver it costs nothing
  * when the database is asleep.
+ *
+ * The success case declares `error` as well, which looks redundant and is not.
+ * Narrowing a union by a boolean discriminant needs `strictNullChecks`, and
+ * TypeScript only turns that on in the repository's own config. The function
+ * that builds the Vercel deployment compiles this file with its own defaults,
+ * where `ok: true` narrows to nothing at all and reading `.error` is a type
+ * error. Declaring the property on both arms makes the read legal under any
+ * setting, so the same source type-checks wherever it is built.
  */
-export async function probeDatabase(): Promise<{ ok: true } | { ok: false; error: unknown }> {
+export async function probeDatabase(): Promise<{ ok: true; error?: undefined } | { ok: false; error: unknown }> {
   try {
     await getDb().execute("select 1");
     return { ok: true };
