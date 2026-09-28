@@ -5,7 +5,7 @@ a hard requirement, not a preference: the map has to render for a stranger the
 moment they open the page, and there is nowhere in this app to put an API key
 that a user would have to obtain first.
 
-The list lives in `apps/web/src/lib/mapStyles.ts`. Each entry was checked to
+The list lives in `frontend/src/lib/mapStyles.ts`. Each entry was checked to
 return a real style document rather than a redirect to a sign-up page.
 
 ## Shipped
@@ -55,7 +55,7 @@ If you add a provider, its `attribution` field is not optional.
 
 ## Adding a provider
 
-1. Append an entry to `BASEMAPS` in `apps/web/src/lib/mapStyles.ts` and add the
+1. Append an entry to `BASEMAPS` in `frontend/src/lib/mapStyles.ts` and add the
    id to the `BasemapId` union.
 2. GL styles need a `styleUrl`. Raster sources need a `rasterUrl` with
    `{z}/{y}/{x}` or `{z}/{x}/{y}` placeholders — `toMapLibreStyle` wraps them in

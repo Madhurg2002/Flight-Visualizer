@@ -1,7 +1,7 @@
 # Author and contact
 
 Skytrace is built by one person. This document is the prose version of
-`apps/web/src/lib/site.ts`, which is the actual source of truth — the landing
+`frontend/src/lib/site.ts`, which is the actual source of truth — the landing
 page About section, the site footer and the auth page all read from it, so
 there is exactly one place to edit.
 
@@ -89,7 +89,7 @@ Repositories are public on [GitHub](https://github.com/Madhurg2002).
 
 ## Changing these details
 
-Edit `apps/web/src/lib/site.ts` only. `AuthorSection.tsx` renders whatever is
+Edit `frontend/src/lib/site.ts` only. `AuthorSection.tsx` renders whatever is
 there and does not hardcode any of it. If you add a social link, add it to
 `AUTHOR_LINKS` and give it a `label` — the footer icons and the contact rows
 both key off that array, and the icon is picked from the URL.

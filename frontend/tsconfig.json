@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@convex/*": ["../backend/convex/*"],
+      "@skytrace/types": ["../common/types/src/index.ts"],
+      "@skytrace/data": ["../common/data/src/index.ts"],
+      "@skytrace/data/routes.generated": ["../common/data/src/routes.generated.ts"],
+      "@skytrace/flight-core": ["../common/flight-core/src/index.ts"],
+      "@skytrace/flight-core/server": ["../common/flight-core/src/server.ts"],
+      "@skytrace/ui": ["../common/ui/src/index.ts"]
+    }
+  },
+  "include": ["src", "../backend/convex", "vite.config.ts"]
+}

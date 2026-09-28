@@ -1,0 +1,18 @@
+{
+  "name": "@skytrace/backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "convex dev",
+    "dev:once": "convex dev --once",
+    "watch:packages": "bun run scripts/watch-packages.ts",
+    "codegen": "convex codegen",
+    "convex": "convex"
+  },
+  "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "^0.0.95",
+    "convex": "^1.46.0"
+  }
+}

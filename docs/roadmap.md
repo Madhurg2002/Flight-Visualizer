@@ -5,8 +5,10 @@
 Ordered roughly as it was built. Each entry says what actually landed, not
 what was attempted.
 
-- [x] **Bun-workspaces monorepo** — `apps/web` plus `types`, `flight-core`,
-      `data` and `ui` packages, with a shared `tsconfig.base.json`.
+- [x] **Bun-workspaces monorepo** — a `backend` folder for the Convex
+      functions, a `frontend` folder for the app, and a `common` folder holding
+      the `types`, `flight-core`, `data` and `ui` packages both sides import,
+      with a shared `tsconfig.base.json`.
 - [x] **Aviation reference data** — 6,072 airports, 6,162 airlines and 66,933
       routes generated from the OpenFlights public dataset, with route counts
       folded in as a hub/airline size signal. Regenerable with one script.

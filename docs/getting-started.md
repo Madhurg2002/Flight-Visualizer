@@ -35,18 +35,20 @@ Run from the repository root.
 
 | Command | What it does |
 | --- | --- |
-| `bun run dev` | Backend, frontend and the package watcher — the normal way to work |
+| `bun run dev` | Backend, frontend and the shared-package watcher — the normal way to work |
 | `bun run web` | Frontend only, if the backend is already running |
 | `bun run backend` | Backend only |
-| `bun run build` | Production build into `apps/web/dist` |
+| `bun run build` | Production build into `frontend/dist` |
 | `bun run typecheck` | TypeScript across the app and the shared packages |
-| `bun run data:build` | Regenerate the aviation datasets from `packages/data/raw/` |
+| `bun run data:build` | Regenerate the aviation datasets from `common/data/raw/` |
 | `bun run check` | Run both harnesses below — the fastest confidence check in the repo |
 | `bun run check:resolver` | Resolver harness: parse and top candidates for a spread of inputs |
 | `bun run check:csv` | 35 assertions over CSV dates, header mapping and round-tripping |
 | `bun run convex -- <cmd>` | The Convex CLI against this project |
 
-In `apps/web`, `bun run dev:all` is the same as the root `dev`.
+In `frontend`, `bun run dev:all` is the same as the root `dev`. In `backend`,
+`bun run dev` is the Convex watcher on its own and `bun run dev:once` pushes a
+single time and exits.
 
 ## Checking the resolver
 
@@ -74,11 +76,11 @@ they are. There is no test runner wired up yet; see
 ## Type checking
 
 ```bash
-cd apps/web && bunx tsc -b --noEmit --force
+cd frontend && bunx tsc -b --noEmit --force
 ```
 
 `-b` builds project references; `--force` ignores the incremental cache, which
-is worth using after editing anything in `packages/`.
+is worth using after editing anything in `common/`.
 
 ## How the browser reaches the backend
 
@@ -107,26 +109,32 @@ path is `resolve:resolve`, not `resolve:default`.
 
 **"Could not resolve @skytrace/..." from Convex.** The workspace packages must
 be declared in the root `package.json` as well as the app's — Convex's bundler
-resolves upward from `packages/`, not from `apps/web/node_modules`. See
+resolves upward from `common/`, not from `frontend/node_modules`. See
 [architecture.md](architecture.md#convex-codegen-and-a-monorepo).
 
 **Auth errors mention a type code.** Convex Auth errors are prefixed with a
 server-generated code. The UI translates the common cases; anything unrecognised
 falls back to the message after the last colon.
 
-**Backend changes have no effect.** `convex dev` only watches `apps/web/convex`.
-The resolver actually lives in `packages/flight-core`, so editing it does not
+**Backend changes have no effect.** `convex dev` only watches `backend/convex`.
+The resolver actually lives in `common/flight-core`, so editing it does not
 trigger a re-push on its own. `bun run dev:all` starts a watcher that handles
 this; if you ran `bun run backend` alone, restart it after changing a package.
 
-**Port 3210 is already in use.** Another local Convex deployment is running, and
-the new one will refuse to start. This usually means an orphaned backend from an
-earlier session is still holding the port — the local backend writes to
-`.convex/local`, and only one may own it at a time.
+**"A local backend is still running on port 3212."** Another Convex deployment
+is up and the new one refuses to start. This almost always means an orphaned
+`convex dev` from an earlier session is still holding the port. Find it with
+`ss -ltnp | grep 321`, then stop that process and restart. Only one local
+backend may own a deployment at a time.
+
+Note that the backend keeps its deployment details in `backend/.env.local`,
+written by `convex dev` itself. The frontend reads that file to find the proxy
+target, so the two halves cannot drift apart — but it does mean moving the
+functions directory gives you a new local deployment on a new port.
 
 ## Deploying
 
-The build is static (`vite build` → `apps/web/dist`), which the hosting layer
+The build is static (`vite build` → `frontend/dist`), which the hosting layer
 can serve. **The backend is the catch.** A local Convex deployment stores its
 data on the machine it runs on, so a production deploy needs a real Convex Cloud
 project — connect one with `bunx convex dev --configure`, which replaces the

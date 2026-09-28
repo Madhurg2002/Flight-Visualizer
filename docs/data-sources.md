@@ -9,8 +9,8 @@ Everything the app knows about airports, airlines and routes comes from the
 - `airlines.dat` — 6,162 carriers
 - `routes.dat` — 67,663 airline routes
 
-The raw files live in `packages/data/raw/` and are compiled to TypeScript by
-`packages/data/scripts/build-data.ts`.
+The raw files live in `common/data/raw/` and are compiled to TypeScript by
+`common/data/scripts/build-data.ts`.
 
 ### Licensing
 
@@ -60,19 +60,19 @@ It does double duty:
 bun run data:build
 ```
 
-Writes `packages/data/src/airports.generated.ts`,
+Writes `common/data/src/airports.generated.ts`,
 `airlines.generated.ts` and `routes.generated.ts`. The files carry a header
 saying they are generated; do not edit them by hand.
 
 To pick up a newer upstream release, replace the three files in
-`packages/data/raw/` and re-run the script. The header comment is the only
+`common/data/raw/` and re-run the script. The header comment is the only
 thing that needs updating.
 
 ### The route table never reaches the browser
 
 `routes.generated.ts` is about 680KB. It is imported by exactly one Convex
 function, `convex/resolve.ts`, and is deliberately **not** re-exported from
-`packages/data/src/index.ts`. Importing the package entry point therefore
+`common/data/src/index.ts`. Importing the package entry point therefore
 cannot pull it into the browser bundle, which is why the airports and airlines
 can be shared freely.
 
@@ -96,7 +96,7 @@ values at write time means a log entry stays true to itself forever.
 
 The consequence is that changing the geometry or emissions code only affects
 newly logged flights. That is the correct trade — see the `add` mutation in
-`apps/web/convex/flights.ts`, which calls the shared helpers server-side and
+`backend/convex/flights.ts`, which calls the shared helpers server-side and
 writes the result.
 
 ## Anything we could not get for free

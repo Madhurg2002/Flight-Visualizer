@@ -46,7 +46,7 @@ jobs:
       # rather than trusted.
       - name: Assert the dataset stayed out of the client bundle
         run: |
-          if grep -rq "Kotoka International Airport" apps/web/dist/assets/*.js; then
+          if grep -rq "Kotoka International Airport" frontend/dist/assets/*.js; then
             echo "::error::airport dataset leaked into the client bundle"
             exit 1
           fi

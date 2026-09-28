@@ -1,6 +1,6 @@
 {
   // The root config exists so one `bun run typecheck` from the root covers the
-  // whole monorepo. The shared packages have no tsconfig of their own: they are
+  // whole repo. The shared packages have no tsconfig of their own: they are
   // consumed as TypeScript source through the `paths` below, exactly as Vite and
   // the Convex bundler resolve them, so they are included here rather than built.
   "extends": "./tsconfig.base.json",
@@ -8,22 +8,22 @@
     "baseUrl": ".",
     "types": ["bun"],
     "paths": {
-      "@/*": ["./apps/web/src/*"],
-      "@convex/*": ["./apps/web/convex/*"],
-      "@skytrace/types": ["./packages/types/src/index.ts"],
-      "@skytrace/data": ["./packages/data/src/index.ts"],
-      "@skytrace/data/routes.generated": ["./packages/data/src/routes.generated.ts"],
-      "@skytrace/flight-core": ["./packages/flight-core/src/index.ts"],
-      "@skytrace/flight-core/server": ["./packages/flight-core/src/server.ts"],
-      "@skytrace/ui": ["./packages/ui/src/index.ts"]
+      "@/*": ["./frontend/src/*"],
+      "@convex/*": ["./backend/convex/*"],
+      "@skytrace/types": ["./common/types/src/index.ts"],
+      "@skytrace/data": ["./common/data/src/index.ts"],
+      "@skytrace/data/routes.generated": ["./common/data/src/routes.generated.ts"],
+      "@skytrace/flight-core": ["./common/flight-core/src/index.ts"],
+      "@skytrace/flight-core/server": ["./common/flight-core/src/server.ts"],
+      "@skytrace/ui": ["./common/ui/src/index.ts"]
     }
   },
   "include": [
-    "packages/*/src",
-    "packages/*/scripts",
-    "apps/web/src",
-    "apps/web/convex",
-    "apps/web/scripts",
-    "apps/web/vite.config.ts"
+    "common/*/src",
+    "common/*/scripts",
+    "frontend/src",
+    "frontend/vite.config.ts",
+    "backend/convex",
+    "backend/scripts"
   ]
 }

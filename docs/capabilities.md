@@ -147,7 +147,7 @@ means adding a real-time flight API; see [roadmap.md](roadmap.md).
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Author and contact section | **Shipped** | On the landing page, with a compact credit in the footer and on the auth page |
-| All contact details in one place | **Shipped** | `apps/web/src/lib/site.ts`; nothing is hardcoded in a component |
+| All contact details in one place | **Shipped** | `frontend/src/lib/site.ts`; nothing is hardcoded in a component |
 
 Built by **Madhur Gupta** — Full Stack Developer at Qen Labs, working on
 geospatial and realtime systems. See the [About section](https://github.com/Madhurg2002)
