@@ -9,6 +9,8 @@ deployed now. Everything else is derived.
 | `DATABASE_URL` | API | In production | A Postgres connection string. The one thing the app cannot run without. |
 | `ALLOWED_ORIGINS` | API | When split across hosts | Comma-separated list of frontend origins allowed to call the API. |
 | `VITE_API_URL` | Build | When split across hosts | The API's base URL, baked into the frontend at build time. |
+| `SEED_DEMO_PASSWORD` | API | No | Password for the demo account. Without it, no demo data is created. |
+| `SEED_DEMO_EMAIL` | API | No | Who that account is. Defaults to `demo@skytrace.app`. |
 | `API_PORT` | Development | No | The port the API listens on. Defaults to `3210`. |
 | `API_ORIGIN` | Development | No | Overrides the address the Vite dev server proxies `/api` to. Rarely needed. |
 
@@ -177,6 +179,45 @@ happens whichever way a host enters — `bun start` at the root or
 `drizzle-kit` is a devDependency, so the install has to include dev
 dependencies — `bun install` does by default, and a host configured for
 `--production` does not.
+
+## Seeding the demo account
+
+`start` runs a seeder after the push, which creates one account with a short
+flight log — eight flights, a trip, and the derived figures that make the
+dashboard worth looking at.
+
+The reason is the free tier. The service is disposable and a fresh database is
+empty, so without this a new deployment is a working app with an empty log: the
+map draws nothing and every stat reads zero, which is indistinguishable from a
+broken deployment without first signing in and logging a flight by hand.
+
+Three things about it are deliberate:
+
+- **Every number is derived, not typed in.** Distance, duration and CO₂ come
+  from the same functions the add-flight route uses, and the coordinates from
+  the compiled dataset. A seeded flight is indistinguishable from a real one,
+  and an IATA code that does not exist fails at boot rather than producing a
+  flight to nowhere.
+- **It is additive and idempotent.** It does nothing at all if the account
+  already exists, so it is safe on every restart and will never touch a real
+  log. There is no update path and no delete path: a seeder that can overwrite
+  is a seeder that can lose data.
+- **The password comes from the environment.** A demo account with a committed
+  password is an account anybody on the internet can sign in to. With no
+  `SEED_DEMO_PASSWORD` set the seeder does nothing and says why, so a
+  deployment without a demo account is a normal, supported thing.
+
+```bash
+SEED_DEMO_PASSWORD=choose-something-you-havent-used bun run db:seed
+```
+
+`db:seed` runs the seeder on its own, which is also how you add the account to
+an existing database. The one thing to do afterwards is change the password from
+inside the app.
+
+A failure here never stops the server booting: the error is logged, `start`
+continues, and `/api/health` reports whatever is actually wrong. A seeder that
+takes the service down with it is worse than one that does not run.
 
 `bun run db:generate` writes a SQL migration file under `backend/db/migrations`
 instead, for when you want the change reviewed in a diff before it reaches a

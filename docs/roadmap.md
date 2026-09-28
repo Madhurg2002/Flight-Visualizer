@@ -38,7 +38,7 @@ what was attempted.
       a static bundle, the API a long-lived Node process, and the database
       scales to zero, so an idle free deployment costs nothing.
 - [x] **The database half is tested without a database** — `bun run check:api`
-      boots a Postgres in-process and drives the real routes, so 170 assertions
+      boots a Postgres in-process and drives the real routes, so 187 assertions
       cover the SQL on every CI run with no connection string.
 - [x] **Rating UI** — a 1–5 star control in the flight detail panel; clicking the
       current rating clears it.

@@ -43,8 +43,10 @@ second, because hosts disagree about which of those they inject. It is the
 command a deployment platform's "start command" field should hold, and the same
 code the Vercel function runs.
 
-It also runs `db:push` first, so a host does not need a release step to create
-the tables — see [environment-variables.md](environment-variables.md#creating-the-tables)
+It also runs `db:push` first and then seeds a demo account, so a host needs
+neither a release step nor a hand-logged flight to have something to look at —
+see [environment-variables.md](environment-variables.md#creating-the-tables) and
+[seeding the demo account](environment-variables.md#seeding-the-demo-account)
 for what that does and does not do.
 
 `bun start` and `node server/start.ts` are the same thing — the script is
@@ -81,8 +83,9 @@ Run from the repository root.
 | `bun run check` | Run the three harnesses below — the fastest confidence check in the repo |
 | `bun run check:resolver` | Resolver harness: parse and top candidates for a spread of inputs |
 | `bun run check:csv` | 34 assertions over CSV dates, header mapping and round-tripping |
-| `bun run check:api` | 170 assertions over the real API, against an in-process Postgres |
+| `bun run check:api` | 187 assertions over the real API, against an in-process Postgres |
 | `bun run db:push` | Create or update the tables from `backend/db/schema.ts` |
+| `bun run db:seed` | Add the demo account and its flights, if `SEED_DEMO_PASSWORD` is set |
 | `bun run db:generate` | Write a reviewable SQL migration instead of applying it directly |
 
 ## Checking the resolver
@@ -196,7 +199,10 @@ something that does that one thing well:
 2. Deploy the repository to Render as a Node service. Build command
    `bun install`, start command `bun run start`, and `DATABASE_URL` in the
    service's environment. `start` applies the schema before the server binds
-   its port, so there is no release step.
+   its port, so there is no release step. Add `SEED_DEMO_PASSWORD` and the
+   service also creates a demo account with a flight log, so the deployment
+   has something to show before anyone signs in — see
+   [environment-variables.md](environment-variables.md#seeding-the-demo-account).
 3. Deploy the repository to Vercel. `vercel.json` builds the static frontend
    and serves the API from `api/[...path].ts`.
 4. Because the two are now on different hosts, set `ALLOWED_ORIGINS` on Render

@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
+import { eq } from "drizzle-orm";
 import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { setDbOverride } from "../db/client.ts";
 import * as schema from "../db/schema.ts";
@@ -799,6 +800,60 @@ console.log("cross-origin");
 
   delete process.env.ALLOWED_ORIGINS;
   resetCorsCache();
+}
+
+console.log("demo data");
+{
+  // The seeder runs from `start`, so a deployment with a fresh database is
+  // only useful if it actually produces a log worth looking at. These are the
+  // properties that matter: it fills something in, what it writes is real
+  // rather than typed in, and running it twice changes nothing.
+  const { seedDemo } = await import("./seed-demo.ts");
+  const email = "demo@seeded.test";
+
+  const first = await seedDemo(db, email, "a-demo-password");
+  check("seeds an account that was not there", first.created);
+  if (first.created) {
+    const rows = await db
+      .select()
+      .from(schema.flights)
+      .where(eq(schema.flights.userId, first.userId));
+    equal("with the flights from the seed table", rows.length, first.flightCount);
+    check("more than a token sample", rows.length >= 5, rows.length);
+
+    const longest = rows.reduce((a, b) => (a.distanceKm > b.distanceKm ? a : b));
+    const sfoJfk = rows.find((r) => r.fromIata === "SFO" && r.toIata === "JFK");
+    check("distances are computed, not typed in", sfoJfk !== undefined && sfoJfk.distanceKm > 3_800 && sfoJfk.distanceKm < 4_200, sfoJfk?.distanceKm);
+    check("emissions follow the distance", rows.every((r) => r.co2Kg > 0 && Number.isFinite(r.co2Kg)));
+    check("durations follow the distance", rows.every((r) => r.durationMin > 0 && Number.isFinite(r.durationMin)));
+    check("a long haul beats a short hop", longest.distanceKm > 3_000, longest.distanceKm);
+    check("every seeded flight is on the trip", rows.every((r) => r.tripId === first.tripId));
+    check("airline names are resolved, not left null", rows.every((r) => r.airlineName !== null));
+
+    const trip = await db.select().from(schema.trips).where(eq(schema.trips.id, first.tripId));
+    equal("and the trip they belong to", trip[0]?.name, "Japan 2025");
+
+    // The password must be the one supplied, and only a hash of it stored.
+    const stored = await db.select().from(schema.users).where(eq(schema.users.email, email));
+    check("stores a hash rather than the password", stored[0]?.passwordHash !== "a-demo-password" && (stored[0]?.passwordHash.length ?? 0) > 40);
+    const { verifyPassword } = await import("../server/password.ts");
+    check("and it verifies", await verifyPassword("a-demo-password", stored[0]!.passwordHash));
+    check("while a wrong password does not", !(await verifyPassword("not-the-password", stored[0]!.passwordHash)));
+  }
+
+  const before = await db.select().from(schema.flights);
+  const second = await seedDemo(db, email, "a-demo-password");
+  check("a second run creates nothing", second.created === false);
+  equal("and leaves the log exactly as it was", (await db.select().from(schema.flights)).length, before.length);
+
+  let rejected = false;
+  try {
+    await seedDemo(db, "short@seeded.test", "tiny");
+  } catch {
+    rejected = true;
+  }
+  check("refuses a password the app would refuse", rejected);
+  equal("  and writes nothing while refusing", (await db.select().from(schema.users).where(eq(schema.users.email, "short@seeded.test"))).length, 0);
 }
 
 console.log("database failures");

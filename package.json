@@ -21,6 +21,7 @@
     "check:api": "bun run --cwd backend scripts/check-api.ts",
     "check": "bun run check:resolver && bun run check:csv && bun run check:api",
     "db:push": "bun run --cwd backend db:push",
+    "db:seed": "bun run --cwd backend db:seed",
     "db:generate": "bun run --cwd backend db:generate"
   },
   "dependencies": {
