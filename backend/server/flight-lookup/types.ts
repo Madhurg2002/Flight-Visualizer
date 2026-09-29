@@ -63,6 +63,28 @@ export type LookupFailure =
 
 export type LookupResult = { ok: true; flight: FlightLookup } | { ok: false; reason: LookupFailure };
 
+/** The failure half of a `LookupResult`, named for callers that switch on it. */
+export type LookupFailureResult = { ok: false; reason: LookupFailure };
+
+/**
+ * Whether a lookup failed.
+ *
+ * Reading `result.reason` after `if (result.ok) return` works by ordinary
+ * union narrowing, and that narrowing is not something every TypeScript
+ * invocation performs the same way: the deployment host type-checks this
+ * package and reports `Property 'reason' does not exist on type
+ * 'LookupResult'` for exactly those two call sites, while the repository's
+ * own check does not. A caller written against this guard is narrowed by the
+ * guard's declared return type, which the compiler takes on trust, so the
+ * answer does not depend on which narrowing path the checker happens to take.
+ *
+ * The `in` test is what makes the guard sound without narrowing anything
+ * itself — `reason` is present on one member of the union and not the other.
+ */
+export function isFailure(result: LookupResult): result is LookupFailureResult {
+  return "reason" in result;
+}
+
 export interface FlightProvider {
   readonly name: string;
   isConfigured(): boolean;

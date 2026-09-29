@@ -1,5 +1,6 @@
 import { getAirline, getAirport, getAirportByIcao } from "@skytrace/data";
 import {
+  isFailure,
   type FlightLookup,
   type FlightLookupQuery,
   type FlightProvider,
@@ -392,7 +393,13 @@ export const aeroDataBoxProvider: FlightProvider = {
       // provider is the authority on whether the flight exists — but an
       // upstream failure is not, so a provider that is briefly down is retried
       // instead of being answered from its own outage for a minute.
-      if (result.ok || result.reason.kind !== "provider-unavailable") {
+      //
+      // Written as a negative test rather than `result.ok || result.reason…`:
+      // narrowing on the right of an `||` is the one place the two arms can be
+      // read under different assumptions, and the deployment host's checker
+      // disagreed with the repository's about it.
+      const failedUpstream = isFailure(result) && result.reason.kind === "provider-unavailable";
+      if (!failedUpstream) {
         answers.set(id, { at: Date.now(), result });
       }
       return result;
