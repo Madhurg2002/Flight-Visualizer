@@ -1,4 +1,4 @@
-import { getAirline, getAirport } from "@skytrace/data";
+import { getAirline, getAirport, getAirportByIcao } from "@skytrace/data";
 import {
   type FlightLookup,
   type FlightLookupQuery,
@@ -227,6 +227,25 @@ const STATUS_MAP: Record<string, FlightStatus> = {
 /* ------------------------------------------------------------------ mapping */
 
 /**
+ * One end of a flight, as the app knows it.
+ *
+ * Prefers the IATA code because that is what the rest of the app stores and
+ * what the user typed, and falls back to the ICAO code because the provider
+ * sends both and a flight to a field with no IATA of its own is a real flight
+ * rather than a broken one. Returns null when neither code is one this app has
+ * coordinates for: the map and the geometry both need them, so a flight to
+ * somewhere unplaceable is refused rather than offered.
+ */
+function resolveAirport(node: unknown): { iata: string } | null {
+  if (typeof node !== "object" || node === null) return null;
+  const byIata = strAt(node, "iata");
+  if (byIata && getAirport(byIata)) return { iata: byIata.toUpperCase() };
+  const byIcao = strAt(node, "icao");
+  const fallback = getAirportByIcao(byIcao);
+  return fallback ? { iata: fallback.iata.toUpperCase() } : null;
+}
+
+/**
  * Turns one provider record into the app's shape, or null if it is not a
  * usable answer.
  *
@@ -235,19 +254,17 @@ const STATUS_MAP: Record<string, FlightStatus> = {
  * partial result would put a half-formed flight in the candidate list.
  */
 function toLookup(record: unknown): FlightLookup | null {
-  // `airport.iata` is nullable — a field the provider knows only by its ICAO
-  // code is still a real airport, but this app resolves coordinates by IATA,
-  // so without it there is nothing that could be drawn or measured.
-  const fromIata = strAt(record, "departure.airport.iata");
-  const toIata = strAt(record, "arrival.airport.iata");
+  // An airport arrives as a pair of codes and the provider may send only one of
+  // them — `iata` and `icao` are each documented as nullable. Resolving on
+  // either means a flight to a smaller field, known only by its ICAO code, is
+  // still placed rather than refused; every row in the dataset carries both.
+  const from = resolveAirport(at(record, "departure.airport"));
+  const to = resolveAirport(at(record, "arrival.airport"));
   const departureAt = localClock(at(record, "departure.scheduledTime.local"));
   const arrivalAt = localClock(at(record, "arrival.scheduledTime.local"));
-  if (!fromIata || !toIata || !departureAt || !arrivalAt) return null;
-
-  // The dataset is the authority on whether these are real airports. If a
-  // provider names a code the app has never heard of, the flight is dropped
-  // rather than offered — the map and the geometry both need coordinates.
-  if (!getAirport(fromIata) || !getAirport(toIata)) return null;
+  if (!from || !to || !departureAt || !arrivalAt) return null;
+  const fromIata = from.iata;
+  const toIata = to.iata;
 
   const raw = strAt(record, "status") ?? "Unknown";
   // A status the fold does not cover falls back to whether the flight has
