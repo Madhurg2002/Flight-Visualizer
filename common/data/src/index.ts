@@ -13,6 +13,15 @@ export { airports, airlines };
 
 const airportByIata = new Map<string, Airport>(airports.map((a) => [a.iata.toUpperCase(), a]));
 
+// A provider that knows an airport only by its ICAO code is still naming a real
+// airport, and every row in the dataset carries one, so this index is complete
+// rather than best-effort. All 6,072 codes are distinct, so the lookup is
+// unambiguous and needs no tie-break.
+const airportByIcao = new Map<string, Airport>();
+for (const a of airports) {
+  if (a.icao) airportByIcao.set(a.icao.toUpperCase(), a);
+}
+
 const airlineByCode = new Map<string, Airline>();
 for (const a of airlines) {
   if (a.iata) airlineByCode.set(`iata:${a.iata.toUpperCase()}`, a);
@@ -22,6 +31,17 @@ for (const a of airlines) {
 export function getAirport(iata: string | null | undefined): Airport | null {
   if (!iata) return null;
   return airportByIata.get(iata.trim().toUpperCase()) ?? null;
+}
+
+/**
+ * The same airport, looked up by its four-letter ICAO code.
+ *
+ * Flight providers name airports by either code and frequently send only one,
+ * so a lookup that accepts IATA alone refuses flights the dataset can place.
+ */
+export function getAirportByIcao(icao: string | null | undefined): Airport | null {
+  if (!icao) return null;
+  return airportByIcao.get(icao.trim().toUpperCase()) ?? null;
 }
 
 export function getAirline(code: string | null | undefined): Airline | null {

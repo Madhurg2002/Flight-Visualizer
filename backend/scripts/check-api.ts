@@ -918,7 +918,15 @@ console.log("flight lookup");
     return calls;
   };
 
-  /** A provider record, in the shape the API actually returns. */
+  /**
+   * A provider record, in the shape the API actually returns.
+   *
+   * The ICAO codes are real rather than the IATA repeated, because a check
+   * that falls back to ICAO has to be given an ICAO the dataset would
+   * recognise — repeating the IATA would make the fallback pass for the wrong
+   * reason, or fail for an unrelated one.
+   */
+  const ICAO: Record<string, string> = { SFO: "KSFO", JFK: "KJFK", LHR: "EGLL" };
   const flightRow = (from: string, to: string) => ({
     number: "UA1234",
     status: "Expected",
@@ -928,14 +936,14 @@ console.log("flight lookup");
     airline: { iata: "UA", icao: "UAL", name: "United Airlines" },
     aircraft: { reg: "N12345", modeS: "ABC123", model: "Boeing 737-800" },
     departure: {
-      airport: { iata: from, icao: from, fullName: from },
+      airport: { iata: from, icao: ICAO[from] ?? null, fullName: from },
       scheduledTime: { local: "2025-03-14T10:35:00", utc: "2025-03-14T18:35:00Z" },
       terminal: "3",
       gate: "G12",
       quality: ["Live"],
     },
     arrival: {
-      airport: { iata: to, icao: to, fullName: to },
+      airport: { iata: to, icao: ICAO[to] ?? null, fullName: to },
       scheduledTime: { local: "2025-03-14T18:52:00", utc: "2025-03-15T02:52:00Z" },
       terminal: "B",
       quality: ["Live"],
@@ -1093,6 +1101,74 @@ console.log("flight lookup");
     stub({ "aerodatabox.com": [] });
     const none = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=9999&date=2025-03-14");
     equal("an empty result is a 404 too", none.status, 404);
+  }
+
+  {
+    // The ICAO fallback is only as good as the index behind it. Every airport
+    // has to carry a code, and the codes have to be distinct — a collision
+    // would make the fallback pick one of two real airports at random, which
+    // is the confident wrong answer this app refuses to give elsewhere. The
+    // provider's comments assert both facts, so they are checked here rather
+    // than trusted.
+    const { airports } = await import("@skytrace/data");
+    equal("every airport in the dataset has an ICAO code", airports.filter((a) => a.icao).length, airports.length);
+    equal("  and no two airports share one", new Set(airports.map((a) => a.icao)).size, airports.length);
+  }
+
+  {
+    // The provider documents both airport codes as nullable and sends them as
+    // a pair, so a flight known only by its ICAO code is a real flight to a
+    // field with no IATA of its own. Refusing it would lose a lookup the
+    // dataset can place, since every row carries both codes.
+    resetLookupCache();
+    const icaoOnly = (row: Record<string, unknown>, side: "departure" | "arrival") => {
+      const next = structuredClone(row) as Record<string, Record<string, unknown>>;
+      const airport = next[side]!.airport as Record<string, unknown>;
+      // What a real response looks like when the field has no IATA code.
+      airport.iata = null;
+      return next;
+    };
+
+    stub({ "aerodatabox.com": [icaoOnly(flightRow("SFO", "JFK") as never, "arrival")] });
+    const byArrivalIcao = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    check("an arrival known only by ICAO is still placed", byArrivalIcao.status === 200, byArrivalIcao);
+    equal("  and resolves to the airport's IATA code", byArrivalIcao.body?.flight?.arrival?.iata, "JFK");
+
+    resetLookupCache();
+    stub({ "aerodatabox.com": [icaoOnly(flightRow("SFO", "JFK") as never, "departure")] });
+    const byDepartureIcao = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    check("and a departure known only by ICAO", byDepartureIcao.status === 200, byDepartureIcao);
+    equal("  resolves to the right code too", byDepartureIcao.body?.flight?.departure?.iata, "SFO");
+  }
+
+  {
+    // Neither code being one this app has coordinates for is different: there
+    // is nothing that could be drawn, so it is refused rather than guessed at.
+    resetLookupCache();
+    const unknownCodes = structuredClone(flightRow("SFO", "JFK") as never) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    (unknownCodes.arrival!.airport as Record<string, unknown>).iata = "QQQ";
+    (unknownCodes.arrival!.airport as Record<string, unknown>).icao = "XXXX";
+    stub({ "aerodatabox.com": [unknownCodes] });
+    const unplaceable = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("an airport under neither code is still refused", unplaceable.status, 422);
+  }
+
+  {
+    // A partial record must not hide a complete one beside it: the provider
+    // returns a list, and the list is the answer.
+    resetLookupCache();
+    const partial = structuredClone(flightRow("SFO", "JFK") as never) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    delete partial.arrival;
+    stub({ "aerodatabox.com": [partial, flightRow("LHR", "SFO")] });
+    const beside = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    check("a complete record beside a partial one is still found", beside.status === 200, beside);
+    equal("  and it is the one that could be used", beside.body?.flight?.departure?.iata, "LHR");
   }
 
   {
