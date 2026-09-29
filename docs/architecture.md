@@ -203,8 +203,8 @@ eyebrow and the headline gradient — and both clear WCAG AA.
 `backend/server/flight-lookup/` is the only part of the app that talks to a
 service it does not control, and it is shaped so that the second one is a new
 file rather than a rewrite. `types.ts` holds the interface and the query
-parsing, `amadeus.ts` is one implementation, and `index.ts` picks whichever is
-configured. Nothing outside that directory knows a provider exists, and no
+parsing, `aero-databox.ts` is one implementation, and `index.ts` picks whichever
+is configured. Nothing outside that directory knows a provider exists, and no
 handler imports one directly.
 
 Two properties are load-bearing rather than tidiness:

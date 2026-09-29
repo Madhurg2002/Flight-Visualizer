@@ -1,14 +1,25 @@
-import { amadeusProvider } from "./amadeus.ts";
+import { aeroDataBoxProvider } from "./aero-databox.ts";
 import type { FlightLookupQuery, FlightProvider, LookupResult } from "./types.ts";
 
 /**
  * Which provider answers. Adding a second one is a line here and a new file
- * beside `amadeus.ts`; nothing outside this directory needs to change.
+ * beside `aero-databox.ts`; nothing outside this directory needs to change.
  */
-const PROVIDERS: readonly FlightProvider[] = [amadeusProvider];
+const PROVIDERS: readonly FlightProvider[] = [aeroDataBoxProvider];
 
 export function activeProvider(): FlightProvider | null {
   return PROVIDERS.find((p) => p.isConfigured()) ?? null;
+}
+
+/**
+ * The name of whichever provider is configured, or null if none is.
+ *
+ * Asked for separately rather than carried on the result so the route can
+ * report it without either duplicating the lookup or hardcoding a name that
+ * would go stale the next time the provider changes.
+ */
+export function activeProviderName(): string | null {
+  return activeProvider()?.name ?? null;
 }
 
 /** True when real flight data is available, without making a request. */
@@ -18,7 +29,7 @@ export function isConfigured(): boolean {
 
 export type { FlightLookup, FlightLookupQuery, FlightStatus, LookupFailure, LookupResult } from "./types.ts";
 export { normaliseQuery } from "./types.ts";
-export { resetTokenCache } from "./amadeus.ts";
+export { resetLookupCache } from "./aero-databox.ts";
 
 /**
  * The single entry point.

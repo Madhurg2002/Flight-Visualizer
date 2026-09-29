@@ -862,7 +862,7 @@ console.log("flight lookup");
   // checks cannot have and the shape of the answer is everything they can.
   // The point being proved is that a real flight number becomes a real
   // candidate — and that nothing at all depends on the key being present.
-  const { normaliseQuery, resetTokenCache } = await import("../server/flight-lookup/index.ts");
+  const { normaliseQuery, resetLookupCache } = await import("../server/flight-lookup/index.ts");
   const realFetch = globalThis.fetch;
 
   equal("parses a carrier and a number", normaliseQuery("ua", "1234"), { airline: "UA", flightNumber: "1234" });
@@ -875,11 +875,9 @@ console.log("flight lookup");
 
   // Nothing configured is the default state of this repository.
   {
-    const savedId = process.env.AMADEUS_CLIENT_ID;
-    const savedSecret = process.env.AMADEUS_CLIENT_SECRET;
-    delete process.env.AMADEUS_CLIENT_ID;
-    delete process.env.AMADEUS_CLIENT_SECRET;
-    resetTokenCache();
+    const saved = process.env.AERODATABOX_API_KEY;
+    delete process.env.AERODATABOX_API_KEY;
+    resetLookupCache();
 
     const status = await caller.call("GET", "/api/lookup/status");
     equal("the status endpoint reports it is off", status.body, { configured: false });
@@ -888,9 +886,8 @@ console.log("flight lookup");
     equal("an unconfigured lookup is not an error", miss.status, 200);
     equal("  and says so rather than failing", miss.body, { configured: false, provider: null, flight: null });
 
-    if (savedId !== undefined) process.env.AMADEUS_CLIENT_ID = savedId;
-    if (savedSecret !== undefined) process.env.AMADEUS_CLIENT_SECRET = savedSecret;
-    resetTokenCache();
+    if (saved !== undefined) process.env.AERODATABOX_API_KEY = saved;
+    resetLookupCache();
   }
 
   const badQuery = await caller.call("GET", "/api/lookup/flight?airline=UA");
@@ -902,9 +899,8 @@ console.log("flight lookup");
   const signedOutStatus = await anon.call("GET", "/api/lookup/status");
   equal("  nor learn whether one is configured", signedOutStatus.status, 401);
 
-  process.env.AMADEUS_CLIENT_ID = "test-id";
-  process.env.AMADEUS_CLIENT_SECRET = "test-secret";
-  resetTokenCache();
+  process.env.AERODATABOX_API_KEY = "test-key";
+  resetLookupCache();
 
   /** Serve one canned provider response, and count what it was asked. */
   const stub = (responses: Record<string, unknown>) => {
@@ -922,67 +918,97 @@ console.log("flight lookup");
     return calls;
   };
 
-  const tokenResponse = { access_token: "tok-123", expires_in: 1799 };
+  /** A provider record, in the shape the API actually returns. */
   const flightRow = (from: string, to: string) => ({
-    flightDesignator: { status: "Scheduled" },
-    airline: { iataCode: "UA" },
-    aircraft: { type: "B739" },
-    departure: { iataCode: from, terminal: "3", gate: "G12", scheduled: "2025-03-14T10:35:00" },
-    arrival: { iataCode: to, terminal: "B", scheduled: "2025-03-14T18:52:00" },
+    number: "UA1234",
+    status: "Expected",
+    isCargo: false,
+    codeshareStatus: "IsOperator",
+    lastUpdatedUtc: "2025-03-14T00:00:00Z",
+    airline: { iata: "UA", icao: "UAL", name: "United Airlines" },
+    aircraft: { reg: "N12345", modeS: "ABC123", model: "Boeing 737-800" },
+    departure: {
+      airport: { iata: from, icao: from, fullName: from },
+      scheduledTime: { local: "2025-03-14T10:35:00", utc: "2025-03-14T18:35:00Z" },
+      terminal: "3",
+      gate: "G12",
+      quality: ["Live"],
+    },
+    arrival: {
+      airport: { iata: to, icao: to, fullName: to },
+      scheduledTime: { local: "2025-03-14T18:52:00", utc: "2025-03-15T02:52:00Z" },
+      terminal: "B",
+      quality: ["Live"],
+    },
   });
 
   {
-    const calls = stub({
-      "oauth2/token": tokenResponse,
-      "schedule/flights": { data: [flightRow("SFO", "JFK")] },
-    });
+    const calls = stub({ "aerodatabox.com": [flightRow("SFO", "JFK")] });
     const found = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234&date=2025-03-14");
     check("a real flight comes back", found.status === 200, found);
     equal("  with the route the provider gave", found.body?.flight?.departure?.iata, "SFO");
     equal("  and the other end of it", found.body?.flight?.arrival?.iata, "JFK");
-    equal("  the equipment it was worked", found.body?.flight?.aircraft, "B739");
+    equal("  the equipment it was worked", found.body?.flight?.aircraft, "Boeing 737-800");
     equal("  the terminal", found.body?.flight?.departure?.terminal, "3");
+    equal("  the gate", found.body?.flight?.departure?.gate, "G12");
     check("  the times are the airport's local time, not a coerced UTC", found.body?.flight?.departure?.scheduledAt === "2025-03-14T10:35", found.body?.flight?.departure?.scheduledAt);
-    check("the request carried the carrier and date", calls.some((u) => u.includes("carrierCode=UA") && u.includes("flightNumber=1234") && u.includes("scheduledDepartureDate=2025-03-14")), calls);
-    check("and the token was fetched, not the key", calls.some((u) => u.includes("oauth2/token")) && !calls.some((u) => u.includes("test-secret")));
+    equal("  the provider names itself rather than the one it replaced", found.body?.provider, "aerodatabox");
+    check("the request carried the carrier, number and date", calls.some((u) => u.includes("/flights/Number/UA1234/2025-03-14")), calls);
+    check("and the key travelled in the header, never the URL", !calls.some((u) => u.includes("test-key")));
+
+    const captured: RequestInit[] = [];
+    const realFetchHeaders = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      captured.push(init ?? {});
+      return realFetchHeaders(input, init);
+    }) as typeof fetch;
+    resetLookupCache();
+    await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234&date=2025-03-14");
+    const headers = (captured.at(-1)?.headers ?? {}) as Record<string, string>;
+    equal("  the key is sent as the header the provider documents", headers["X-Api-Key"], "test-key");
+    globalThis.fetch = realFetchHeaders;
   }
 
   {
-    // The second lookup must reuse the token: the free tier counts calls, and
-    // spending one per search would halve the budget before answering anything.
-    resetTokenCache();
-    const calls = stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [flightRow("SFO", "JFK")] } });
+    // The free plan meters every call, so a repeated question must not spend
+    // the budget twice. This is the property the retired provider got from
+    // caching a token; here it is the answer itself that is memoised, which is
+    // the stronger saving because the second lookup never reaches the network.
+    resetLookupCache();
+    const calls = stub({ "aerodatabox.com": [flightRow("SFO", "JFK")] });
     await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("the same question twice costs one provider call", calls.length, 1);
+
     await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1235");
-    equal("the token is fetched once and cached across lookups", calls.filter((u) => u.includes("oauth2/token")).length, 1);
+    equal("  a different flight is not answered from the first one's cache", calls.length, 2);
   }
 
   {
-    // Caching a token is not enough on its own: three lookups opened together
-    // on a cold cache would each miss the cache and each spend a call. They
-    // have to share the one request that is already in flight.
-    resetTokenCache();
-    let tokenCalls = 0;
+    // Caching an answer is not enough on its own: three lookups arriving
+    // together on a cold cache would each miss it and each spend a call, and
+    // the free plan rate-limits to one request a second anyway. They have to
+    // share the one request that is already in flight.
+    resetLookupCache();
+    let requests = 0;
     const realSetTimeout = setTimeout;
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      const url = String(input);
-      const body = url.includes("oauth2/token") ? tokenResponse : { data: [flightRow("SFO", "JFK")] };
-      if (url.includes("oauth2/token")) {
-        tokenCalls += 1;
-        // Hold it open, so every lookup below is demonstrably concurrent.
-        await new Promise((resolve) => realSetTimeout(resolve, 50));
-      }
-      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    globalThis.fetch = (async () => {
+      requests += 1;
+      // Hold it open, so every lookup below is demonstrably concurrent.
+      await new Promise((resolve) => realSetTimeout(resolve, 50));
+      return new Response(JSON.stringify([flightRow("SFO", "JFK")]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }) as typeof fetch;
 
     const answered = await Promise.all([
       caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234"),
-      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1235"),
-      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1236"),
+      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234"),
+      caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234"),
     ]);
-    equal("concurrent lookups share one token request", tokenCalls, 1);
+    equal("concurrent identical lookups share one request", requests, 1);
     check("  and every one of them is still answered", answered.every((r) => r.status === 200), answered);
-    resetTokenCache();
   }
 
   {
@@ -991,52 +1017,130 @@ console.log("flight lookup");
     // classified the same wherever the host happens to run.
     const unrecognised = (arrival: string) => ({
       ...flightRow("SFO", "JFK"),
-      flightDesignator: { status: "Teleported" },
-      arrival: { iataCode: "JFK", terminal: "B", scheduled: arrival },
+      status: "Teleported",
+      arrival: {
+        airport: { iata: "JFK", icao: "KJFK", fullName: "JFK" },
+        scheduledTime: { local: arrival, utc: arrival + "Z" },
+        terminal: "B",
+        quality: ["Live"],
+      },
     });
 
-    resetTokenCache();
-    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [unrecognised("2020-01-02T03:04:00")] } });
+    resetLookupCache();
+    stub({ "aerodatabox.com": [unrecognised("2020-01-02T03:04:00")] });
     const past = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("an unrecognised status in the past reads as landed", past.body?.flight?.status, "landed");
 
-    resetTokenCache();
-    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [unrecognised("2099-01-02T03:04:00")] } });
+    resetLookupCache();
+    stub({ "aerodatabox.com": [unrecognised("2099-01-02T03:04:00")] });
     const future = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("  and one in the future as unknown", future.body?.flight?.status, "unknown");
   }
 
   {
-    const calls = stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
+    // The provider's own states are folded rather than renamed: a flight log
+    // records what happened, and "boarding" and "gate closed" are both a
+    // flight that has not left yet.
+    const withStatus = (status: string) => ({ ...flightRow("SFO", "JFK"), status });
+    const readStatus = async (status: string) => {
+      resetLookupCache();
+      stub({ "aerodatabox.com": [withStatus(status)] });
+      const r = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+      return r.body?.flight?.status;
+    };
+
+    equal("a flight still at the gate is scheduled", await readStatus("Boarding"), "scheduled");
+    equal("one in the air is active", await readStatus("EnRoute"), "active");
+    equal("one that has arrived has landed", await readStatus("Arrived"), "landed");
+    equal("a cancelled one is cancelled", await readStatus("Canceled"), "cancelled");
+    equal("  including the uncertain kind", await readStatus("CanceledUncertain"), "cancelled");
+    equal("a diverted one says so", await readStatus("Diverted"), "diverted");
+  }
+
+  {
+    // A revised time is the actual once the flight has moved and an estimate
+    // before that, so it is carried through and labelled as the provider's.
+    resetLookupCache();
+    stub({
+      "aerodatabox.com": [
+        {
+          ...flightRow("SFO", "JFK"),
+          status: "Arrived",
+          departure: {
+            ...flightRow("SFO", "JFK").departure,
+            revisedTime: { local: "2025-03-14T10:52:00", utc: "2025-03-14T18:52:00Z" },
+          },
+        },
+      ],
+    });
+    const revised = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("a revised time is kept as the actual", revised.body?.flight?.departure?.actualAt, "2025-03-14T10:52");
+    equal("  and the schedule is still the schedule", revised.body?.flight?.departure?.scheduledAt, "2025-03-14T10:35");
+  }
+
+  {
+    // 204 is how the provider says "no such flight", and it carries no body at
+    // all. An empty array on a 200 is the same answer said the other way, and
+    // both are a miss rather than an outage — the difference decides whether
+    // the client offers to search by date instead.
+    resetLookupCache();
+    globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch;
+    const empty = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=9999&date=2025-03-14");
+    equal("an empty 204 is a 404", empty.status, 404);
+    check("  and the message suggests what to change", String(empty.body?.error).includes("without the date"), empty.body);
+
+    resetLookupCache();
+    stub({ "aerodatabox.com": [] });
     const none = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=9999&date=2025-03-14");
-    equal("a flight the provider does not know is a 404", none.status, 404);
-    check("  and the message suggests what to change", String(none.body?.error).includes("without the date"), none.body);
-    resetTokenCache();
-    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
+    equal("an empty result is a 404 too", none.status, 404);
+  }
+
+  {
+    // A 401 is a key the provider will not accept, which is the operator's
+    // problem to fix — not a bad flight number, and not an outage. Reporting it
+    // as a 422 would point at the wrong thing entirely.
+    resetLookupCache();
+    globalThis.fetch = (async () => new Response(JSON.stringify({ message: "nope" }), { status: 401 })) as typeof fetch;
+    const badKey = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("a rejected key is refused rather than reported as a miss", badKey.status, 422);
+
+    resetLookupCache();
+    globalThis.fetch = (async () => new Response(JSON.stringify({ message: "slow down" }), { status: 429 })) as typeof fetch;
+    const limited = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("a rate limit is an upstream 502 the client may retry", limited.status, 502);
   }
 
   {
     // A provider that names an airport this app has never heard of cannot be
     // drawn on the map, so it is refused rather than offered as a candidate.
-    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [flightRow("SFO", "ZZZ")] } });
+    resetLookupCache();
+    stub({ "aerodatabox.com": [flightRow("SFO", "ZZZ")] });
     const unmappable = await caller.call("GET", "/api/lookup/flight?airline=QQ&flightNumber=1&date=2025-03-14");
     equal("a flight this app cannot place is a 422", unmappable.status, 422);
-    resetTokenCache();
-    stub({ "oauth2/token": tokenResponse, "schedule/flights": { data: [] } });
   }
 
   {
+    // An upstream failure is not remembered: caching one would answer the next
+    // lookup from the outage for the length of the TTL.
+    resetLookupCache();
+    let attempts = 0;
     globalThis.fetch = (async () => {
-      throw new Error("ENOTFOUND api.amadeus.com");
+      attempts += 1;
+      if (attempts === 1) throw new Error("ENOTFOUND api.aerodatabox.com");
+      return new Response(JSON.stringify([flightRow("SFO", "JFK")]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }) as typeof fetch;
     const down = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("a provider that is down is a 502, not a 500", down.status, 502);
+    const retried = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("  and the outage is not cached against the flight", retried.status, 200);
   }
 
   globalThis.fetch = realFetch;
-  delete process.env.AMADEUS_CLIENT_ID;
-  delete process.env.AMADEUS_CLIENT_SECRET;
-  resetTokenCache();
+  delete process.env.AERODATABOX_API_KEY;
+  resetLookupCache();
 }
 
 console.log("boot wiring");

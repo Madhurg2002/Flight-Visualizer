@@ -39,10 +39,9 @@ Flight numbers are not in the OpenFlights dataset — it has routes, not
 schedules. Given "UA 1234" with no airports we can offer the carrier's main
 routes and ask, but we cannot say *which* one was flight 1234.
 
-With `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` set, the add-flight flow
-offers a live lookup that answers exactly that, and fills the form with the
-route the provider reported. Without them the app behaves exactly as it always
-has. See
+With `AERODATABOX_API_KEY` set, the add-flight flow offers a live lookup that
+answers exactly that, and fills the form with the route the provider reported.
+Without it the app behaves exactly as it always has. See
 [environment-variables.md](environment-variables.md#live-flight-data).
 
 ---

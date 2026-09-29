@@ -10,9 +10,8 @@ it. Everything else is derived.
 | `DATABASE_URL` | API | In production | A Postgres connection string. The one thing the app cannot run without. |
 | `ALLOWED_ORIGINS` | API | When split across hosts | Comma-separated list of frontend origins allowed to call the API. |
 | `VITE_API_URL` | Build | When split across hosts | The API's base URL, baked into the frontend at build time. |
-| `AMADEUS_CLIENT_ID` | API | No | Enables live flight lookup. Without it, the app is unchanged. |
-| `AMADEUS_CLIENT_SECRET` | API | No | As above. Both or neither. |
-| `AMADEUS_ENV` | API | No | `production` for live data; anything else uses the test host. |
+| `AERODATABOX_API_KEY` | API | No | Enables live flight lookup. Without it, the app is unchanged. |
+| `AERODATABOX_BASE_URL` | API | No | Only for a marketplace account. See below. |
 | `SEED_DEMO_PASSWORD` | API | No | Password for the demo account. Without it, no demo data is created. |
 | `SEED_DEMO_EMAIL` | API | No | Who that account is. Defaults to `demo@skytrace.app`. |
 | `API_PORT` | Development | No | The port the API listens on. Defaults to `3210`. |
@@ -249,20 +248,46 @@ The one query the compiled dataset cannot answer. OpenFlights has routes but no
 schedules, so `UA 1234` offline can only come back as the carrier's hub routes
 with a reason explaining why — honest, and not useful.
 
-Set `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` and the app asks a real
-provider instead. The credentials are read in `backend/server/flight-lookup/`
-and never reach the browser: every call is made from a route handler, and there
-is no client-side code that could be made to send them.
+Set `AERODATABOX_API_KEY` and the app asks a real provider instead. The key is
+read in `backend/server/flight-lookup/` and never reaches the browser: every
+call is made from a route handler, and there is no client-side code that could
+be made to send it.
 
 ```
-AMADEUS_CLIENT_ID=…
-AMADEUS_CLIENT_SECRET=…
-AMADEUS_ENV=production
+AERODATABOX_API_KEY=…
 ```
 
-`AMADEUS_ENV` defaults to the provider's test host, which is free but carries
-synthetic schedules — leave it unset while developing so a real lookup cannot
-be mistaken for a real flight.
+The free plan covers a few hundred calls a month, which is a personal flight
+log's entire lifetime of lookups. It needs no card and no sales conversation.
+
+Sign up at [aerodatabox.com/pricing](https://aerodatabox.com/pricing); the key
+is shown on the account page. It is sent as an `X-Api-Key` header.
+
+### If you signed up through a marketplace
+
+The same API is sold through API.Market and RapidAPI, and an account opened
+there is served by that marketplace's own host rather than the direct one. The
+paths and the header are identical, so only the address changes:
+
+```
+AERODATABOX_BASE_URL=https://apimarket.aerodatabox.com
+```
+
+This is validated rather than trusted. A non-provider host is refused and the
+direct host used instead, because this variable is the one place a mistyped
+address could send the key somewhere it has no business going. Loopback is
+allowed over plain http so the provider can be exercised against a local
+server.
+
+### Why not Amadeus
+
+It was the provider here first, and it was the better one while it was
+available: free, generous, and returning the operating carrier, the equipment
+and the terminal. Amadeus retired its self-service developer portal on 17 July
+2026 and disabled every key issued through it. The enterprise portal that
+replaced it requires a commercial agreement, which is not a trade this app
+should make on the user's behalf — it would put a bill in front of someone for
+a feature they never asked to pay for.
 
 Three things this deliberately does not change:
 
@@ -272,9 +297,12 @@ Three things this deliberately does not change:
   error, so a client handed it falls back instead of reporting a failure.
 - **It is behind sign-in.** The provider meters calls; an open endpoint that
   spends them is a liability rather than a feature.
-- **The token is cached.** One token request is reused until shortly before it
-  expires, because the free tier counts calls and a token per lookup would
-  spend half the budget before answering anything.
+- **The answer is cached, briefly.** A repeated question is answered from a
+  short-lived memo rather than from the network, and lookups that arrive
+  together share the single request already in flight. The free plan counts
+  every call, and a double-clicked button should not cost two of them. Only a
+  settled answer is remembered, so a provider that is briefly down is retried
+  rather than answered from its own outage.
 
 Times come back in the **airport's local time** and are labelled as such. The
 provider reports no timezone, so coercing them to UTC would silently shift a
@@ -283,7 +311,7 @@ which clock it read.
 
 ## What there is not
 
-There are no API keys, no signing secrets, and no third-party auth provider.
+There are no signing secrets and no third-party auth provider.
 
 The previous version of this app used Convex Auth, which needed a private key
 and a JWKS endpoint to be generated before sign-in worked at all — a failure
@@ -292,6 +320,9 @@ nothing. Sessions here are a random token in an `HttpOnly` cookie, and the
 token is stored only as a SHA-256 hash, so there is no signing key to
 provision, rotate, or leak.
 
-If an email-verification or password-reset flow is added later, that is when an
-email provider becomes necessary — and it is the only thing in this list that
-would need an account with somebody else.
+The one third-party key in the app is `AERODATABOX_API_KEY`, and it is optional
+in the strongest sense: the provider is only reached for a live flight lookup,
+it is read only on the server, and with it unset the app is complete. If an
+email-verification or password-reset flow is added later, that is when an email
+provider becomes necessary — and it would be the first thing the app genuinely
+cannot run without.
