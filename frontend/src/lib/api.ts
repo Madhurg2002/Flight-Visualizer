@@ -291,10 +291,27 @@ function queryString(args: Record<string, unknown>): string {
  * what is in the log.
  * ---------------------------------------------------------------------- */
 
-type Entry = { data: unknown; loaded: boolean; error?: unknown };
+/**
+ * One cached answer.
+ *
+ * `stale` means "this is the last good answer, and a newer one is being
+ * fetched". It is the difference between a background refresh and a blank
+ * screen: a stale entry is still returned to the component, so the log stays
+ * on screen while the request is in the air.
+ */
+type Entry = { data: unknown; loaded: boolean; stale?: boolean; error?: unknown };
 
 const cache = new Map<string, Entry>();
 const listeners = new Set<() => void>();
+
+/**
+ * Requests in the air, keyed by the query rather than by its cache key.
+ *
+ * Keying by the query is what makes an invalidation cheap: a request already
+ * running when the cache was invalidated is still the request this generation
+ * needs, so starting a second one would spend the provider's quota to fetch
+ * what is already on its way.
+ */
 const inFlight = new Set<string>();
 
 /** Bumped whenever the cache changes; read through `useSyncExternalStore`. */
@@ -317,7 +334,7 @@ function setEntry(key: string, entry: Entry): void {
 }
 
 /**
- * Bumped only when the whole cache is dropped, and part of every cache key.
+ * Bumped whenever every query is asked to refetch, and part of every cache key.
  *
  * It has to be part of the key, not merely a signal: a query's effect depends
  * on its key, so without it a cleared cache would leave every mounted query
@@ -329,43 +346,101 @@ function setEntry(key: string, entry: Entry): void {
  */
 let generation = 0;
 
+/** The cache key for a query under the current generation. */
+function entryKey(logical: string): string {
+  return `${generation}\0${logical}`;
+}
+
+/** The part of a cache key that identifies the query, ignoring generation. */
+function logicalKeyOf(key: string): string {
+  const at = key.indexOf("\0");
+  return at === -1 ? key : key.slice(at + 1);
+}
+
 /**
- * Drops every cached result.
+ * Asks every query to refetch, without blanking anything.
  *
- * Cleared wholesale rather than per-key because it is not knowable here which
- * queries a given mutation affects: deleting a flight changes the list, the
- * stats, and every trip's flight count. Refetching all of them is a few
- * hundred bytes each and happens on an explicit user action.
+ * The previous answers are carried into the new generation and marked stale,
+ * so each component keeps rendering what it has while the request is in the
+ * air. This is the whole point of the function, and getting it wrong is
+ * visible: dropping the entries instead made every mounted query return
+ * `undefined`, which emptied the log and the map for the length of one round
+ * trip — and since a poll does this on a timer, it read as the app reloading
+ * by itself every twenty seconds.
+ *
+ * Refetched wholesale rather than per-key because it is not knowable here
+ * which queries a given mutation affects: deleting a flight changes the list,
+ * the stats, and every trip's flight count. Each is a few hundred bytes.
  */
 export function invalidateQueries(): void {
+  generation += 1;
+  const carried: [string, Entry][] = [];
+  for (const [key, entry] of cache) {
+    // Only settled answers are carried. An error entry has nothing worth
+    // keeping, and carrying it would leave the failed state on screen.
+    if (entry.loaded) carried.push([entryKey(logicalKeyOf(key)), { ...entry, stale: true }]);
+  }
+  cache.clear();
+  for (const [key, entry] of carried) cache.set(key, entry);
+  publish();
+}
+
+/**
+ * Drops every cached result, keeping nothing.
+ *
+ * For the one case where the last answer must not survive: signing out. The
+ * data belongs to a session that has ended, and a revalidation that failed
+ * would otherwise leave it on screen for as long as the retry took.
+ */
+export function clearQueries(): void {
   generation += 1;
   cache.clear();
   publish();
 }
 
-async function loadInto<T>(key: string, method: "GET" | "POST", path: string, body?: unknown): Promise<void> {
-  if (inFlight.has(key)) return;
-  inFlight.add(key);
+async function loadInto<T>(
+  logical: string,
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+): Promise<void> {
+  if (inFlight.has(logical)) return;
+  inFlight.add(logical);
   try {
     const data = await request<T>(method, path, body);
-    // The cache may have been cleared while this was in flight; writing the
-    // result back is still correct, since it is the freshest answer for `key`.
-    setEntry(key, { data, loaded: true });
+    // Written under the *current* generation, not the one this request began
+    // in. If an invalidation landed while it was in the air, this is still the
+    // freshest answer, and writing it under the old key would leave the
+    // carried entry stale forever with nothing left to replace it.
+    setEntry(entryKey(logical), { data, loaded: true });
   } catch (error) {
     // Recorded rather than thrown: a query that fails should not take the page
-    // down, and the components already render an empty state for `undefined`.
-    setEntry(key, { data: undefined, loaded: true, error });
+    // down. A revalidation that fails keeps the last good answer on screen
+    // rather than replacing it with nothing, because a dropped connection is
+    // not a reason to empty somebody's flight log.
+    const key = entryKey(logical);
+    const previous = cache.get(key);
+    setEntry(key, {
+      data: previous?.data,
+      loaded: previous?.loaded ?? true,
+      stale: false,
+      error,
+    });
   } finally {
-    inFlight.delete(key);
+    inFlight.delete(logical);
   }
 }
 
 /**
- * Run a query, returning `undefined` until it has an answer.
+ * Run a query, returning `undefined` only until it has an answer at all.
  *
  * `"skip"` is the same sentinel Convex used, and has the same meaning: do not
- * run this yet. The result stays on screen while a background refresh is in
- * flight, so a poll never makes the map flash empty.
+ * run this yet.
+ *
+ * Once there is an answer it stays on screen. A refetch — from a mutation, or
+ * from the background poll — marks the entry stale and fetches again, but the
+ * previous result is still what this returns until the new one lands. That is
+ * what stops a poll from making the map and the log flash empty.
  */
 export function useQuery<TArgs, TResult>(
   ref: Endpoint<TArgs, TResult>,
@@ -378,15 +453,22 @@ export function useQuery<TArgs, TResult>(
   // clears the cache; the snapshot itself is not needed here, only the change.
   useSyncExternalStore(subscribe, getRevision, getRevision);
 
-  const key = skipped ? null : `${generation}\0${cacheKey(ref, concreteArgs)}`;
+  const logical = cacheKey(ref, concreteArgs);
+  const key = skipped ? null : entryKey(logical);
   const qs = skipped ? "" : queryString(concreteArgs);
   const entry = key === null ? undefined : cache.get(key);
+  // A stale entry is still a real answer and is still returned. Only a query
+  // that has never resolved reads as `undefined`.
   const data = entry?.loaded ? (entry.data as TResult) : undefined;
 
   useEffect(() => {
-    if (key === null || cache.has(key) || inFlight.has(key)) return;
-    void loadInto<TResult>(key, ref.method, ref.path + qs);
-  }, [key, ref, qs]);
+    if (key === null) return;
+    // A stale entry is a reason to fetch, not a reason to skip: it is the last
+    // good answer, and something has already asked for a newer one.
+    if (cache.has(key) && !cache.get(key)?.stale) return;
+    if (inFlight.has(logical)) return;
+    void loadInto<TResult>(logical, ref.method, ref.path + qs);
+  }, [key, logical, ref, qs]);
 
   return data;
 }

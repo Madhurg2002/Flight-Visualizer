@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from "react";
-import { apiFetch, invalidateQueries } from "./api";
+import { apiFetch, clearQueries } from "./api";
 
 /**
  * Sign-in state, over an ordinary session cookie.
@@ -137,7 +137,7 @@ export function usePasswordAuth() {
       // The cookie is set by the response above. Reading the identity back
       // republishes it to every `useAuth` caller, so the header and the
       // dashboard switch over without a reload.
-      invalidateQueries();
+      clearQueries();
       await refresh();
       return { ok: true as const };
     } catch {
@@ -154,7 +154,11 @@ export function useSignOut() {
       // Signing out locally is still the right thing to do: the cookie is the
       // server's to clear, but the UI should not get stuck signed in.
     }
-    invalidateQueries();
+    // Cleared rather than revalidated. A revalidation carries the last answers
+    // forward so a refetch cannot blank the screen, and carrying them past the
+    // end of a session would leave somebody's flight log on screen for as long
+    // as the unauthenticated retry took.
+    clearQueries();
     loaded = true;
     setState({ isLoading: false, isAuthenticated: false, email: null });
   }, []);
