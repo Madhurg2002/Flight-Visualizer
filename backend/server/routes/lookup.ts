@@ -1,5 +1,6 @@
 import { HttpError, UserError, isIsoDate } from "../http.ts";
 import { isConfigured, lookupFlight, normaliseQuery, activeProviderName } from "../flight-lookup/index.ts";
+import { isFailure } from "../flight-lookup/types.ts";
 import { requireUser, type Ctx } from "../session.ts";
 
 /**
@@ -40,7 +41,7 @@ export async function lookupFlightQuery(ctx: Ctx): Promise<unknown> {
   // The name comes from the provider rather than being written here, so a
   // swapped provider reports itself correctly instead of claiming to be the
   // one it replaced.
-  if (result.ok) return { configured: true, provider: activeProviderName(), flight: result.flight };
+  if (!isFailure(result)) return { configured: true, provider: activeProviderName(), flight: result.flight };
 
   switch (result.reason.kind) {
     case "not-configured":
