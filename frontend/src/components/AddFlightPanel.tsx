@@ -23,6 +23,28 @@ const CONFIDENCE_STYLE: Record<MatchConfidence, string> = {
 
 const CABINS: Cabin[] = ["economy", "premium_economy", "business", "first"];
 
+/**
+ * The resolver's field names, in the words a person would use.
+ *
+ * The backend answers with what it could not work out, and the honest thing is
+ * to pass that on rather than to report a bare failure: someone who typed
+ * "tokyo" did not type nonsense, and telling them nothing matched is both
+ * wrong and the end of the conversation.
+ */
+const MISSING_PHRASE: Record<string, string> = {
+  origin: "where you flew from",
+  destination: "where you flew to",
+  airline: "which airline",
+  date: "the date",
+};
+
+function missingPhrase(missing: string[]): string {
+  const parts = missing.map((field) => MISSING_PHRASE[field] ?? field);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0]!;
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 type Draft = {
   fromIata: string;
   toIata: string;
@@ -193,9 +215,44 @@ export function AddFlightPanel({
         <div className="mt-4">
           {result.candidates.length === 0 ? (
             <div className="rounded-lg border border-dashed border-paper-300 p-3">
-              <p className="text-xs text-ink-500">
-                Nothing matched “{submitted}”.
-              </p>
+              {/*
+                Two different situations look identical from here: an input the
+                resolver could not place at all, and one it understood but could
+                not finish. They deserve different sentences. The backend has
+                already parsed the input and reported what is still outstanding,
+                so the second case is a question to ask rather than a dead end,
+                and saying "nothing matched" about a city it just resolved to
+                NRT is simply untrue.
+              */}
+              {result.missing.length > 0 ? (
+                <>
+                  <p className="text-xs text-ink-600">
+                    {result.parsed.fromIata || result.parsed.toIata ? (
+                      <>
+                        I read “{submitted}” as{" "}
+                        {result.parsed.fromIata && result.parsed.toIata
+                          ? `${result.parsed.fromIata} to ${result.parsed.toIata}`
+                          : result.parsed.fromIata
+                            ? `a flight from ${result.parsed.fromIata}`
+                            : `a flight to ${result.parsed.toIata}`}
+                        , but I still need {missingPhrase(result.missing)} before I
+                        can pick one.
+                      </>
+                    ) : (
+                      <>
+                        I could not make anything of “{submitted}” on its own —
+                        I need {missingPhrase(result.missing)} to place it.
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-2 text-[11px] text-ink-400">
+                    Add one of those and search again, or type the flight in
+                    yourself.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-ink-500">Nothing matched “{submitted}”.</p>
+              )}
               <button
                 type="button"
                 onClick={startManual}
