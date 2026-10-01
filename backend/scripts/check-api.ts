@@ -880,7 +880,7 @@ console.log("flight lookup");
     resetLookupCache();
 
     const status = await caller.call("GET", "/api/lookup/status");
-    equal("the status endpoint reports it is off", status.body, { configured: false });
+    equal("the status endpoint reports it is off", status.body, { configured: false, unavailable: null });
 
     const miss = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("an unconfigured lookup is not an error", miss.status, 200);
@@ -1180,10 +1180,50 @@ console.log("flight lookup");
     const badKey = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("a rejected key is refused rather than reported as a miss", badKey.status, 422);
 
+    // 402 and 429 are billing answers. The free plan returns 402 with "your
+    // plan is expired and/or included monthly API units and credits have been
+    // exhausted" once its few hundred calls a month are gone, and folding that
+    // into provider-unavailable reported it as "the provider did not answer" —
+    // sending the reader to check a network that was working perfectly.
     resetLookupCache();
-    globalThis.fetch = (async () => new Response(JSON.stringify({ message: "slow down" }), { status: 429 })) as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ message: "Your plan is expired and/or included monthly API units and credits have been exhausted." }), {
+        status: 402,
+      })) as typeof fetch;
+    const spent = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("an exhausted plan is a 503, not an upstream 502", spent.status, 503);
+    check("  and says the plan is the problem", /plan|units/i.test(String(spent.body?.error)), spent.body);
+    check("  and does not blame the network", !/did not answer/i.test(String(spent.body?.error)), spent.body);
+    check("  and says what to do about it", /top up|renew/i.test(String(spent.body?.error)), spent.body);
+
+    // The same failure has to be explainable before anything is clicked, or the
+    // user meets it only by pressing a button that cannot work.
+    const statusAfterSpend = await caller.call("GET", "/api/lookup/status");
+    equal("a refused key is still configured", statusAfterSpend.body?.configured, true);
+    check(
+      "  and the status endpoint explains why before any lookup",
+      /plan|units/i.test(String(statusAfterSpend.body?.unavailable)),
+      statusAfterSpend.body,
+    );
+
+    // A top-up does not restart the process, so a remembered refusal must not
+    // outlive the problem it remembers.
+    resetLookupCache();
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ message: "slow down" }), { status: 429 })) as typeof fetch;
     const limited = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
-    equal("a rate limit is an upstream 502 the client may retry", limited.status, 502);
+    equal("a rate limit is a 429 the client may retry", limited.status, 429);
+    check("  and is named as a rate limit", /rate limit|throttl/i.test(String(limited.body?.error)), limited.body);
+    check("  and does not claim the plan is gone", !/plan is expired/i.test(String(limited.body?.error)), limited.body);
+
+    // One real answer clears the standing objection, so a topped-up plan is
+    // noticed by the next successful lookup rather than only by the clock.
+    resetLookupCache();
+    stub({ "aerodatabox.com": [flightRow("SFO", "JFK")] });
+    const recovered = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    check("a working provider is reachable again once it answers", recovered.status === 200, recovered);
+    const statusAfterRecovery = await caller.call("GET", "/api/lookup/status");
+    equal("  and the status endpoint stops warning", statusAfterRecovery.body?.unavailable, null);
   }
 
   {

@@ -304,6 +304,40 @@ Three things this deliberately does not change:
   settled answer is remembered, so a provider that is briefly down is retried
   rather than answered from its own outage.
 
+### When the free plan runs out
+
+The plan covers a few hundred calls a month, and then the provider answers
+`402`: *"Your plan is expired and/or included monthly API units and credits
+have been exhausted."* A `429` is the same allowance being spent faster than
+its window allows.
+
+Both are billing answers, and both used to be folded into the same
+`provider-unavailable` the app reports for a genuine outage. That made a
+perfectly healthy network look broken, and the only thing the message offered
+was to try again — which cannot work until somebody pays for more calls.
+
+They are their own reason now, and they say what they are:
+
+| Provider says | The API answers | The user is told |
+| --- | --- | --- |
+| `402` | `503` | Live flight lookup is off: the plan is expired or this month's units are used up. Top up or renew it. |
+| `429` | `429` | Live flight lookup is rate limited right now. Try again in a moment. |
+| timeout, DNS, TLS, `5xx` | `502` | The flight data provider did not answer. Try again shortly. |
+
+Only the last one is a network problem, and it is the only one that suggests
+retrying.
+
+A spent plan is also remembered for ten minutes, and reported by
+`GET /lookup/status` as `unavailable`, so the panel explains itself instead of
+rendering a button that can only fail. The key is still `configured: true` —
+it is present and valid, there is simply nothing left to spend it on. The
+warning expires on its own and a single working answer clears it, so topping
+up the plan does not need a redeploy. The refusal is logged to the host's
+output as well, because it is the one failure only the operator can fix.
+
+The offline resolver is unaffected throughout. A flight log with an expired
+lookup plan is a complete log with one missing convenience.
+
 Times come back in the **airport's local time** and are labelled as such. The
 provider reports no timezone, so coercing them to UTC would silently shift a
 flight by a day; a log entry that is an hour wrong is worse than one that says

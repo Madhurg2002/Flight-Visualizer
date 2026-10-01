@@ -29,7 +29,7 @@ export function isConfigured(): boolean {
 
 export type { FlightLookup, FlightLookupQuery, FlightStatus, LookupFailure, LookupResult } from "./types.ts";
 export { normaliseQuery } from "./types.ts";
-export { resetLookupCache } from "./aero-databox.ts";
+export { quotaExhausted, resetLookupCache } from "./aero-databox.ts";
 
 /**
  * The single entry point.

@@ -1,5 +1,11 @@
 import { HttpError, UserError, isIsoDate } from "../http.ts";
-import { isConfigured, lookupFlight, normaliseQuery, activeProviderName } from "../flight-lookup/index.ts";
+import {
+  isConfigured,
+  lookupFlight,
+  normaliseQuery,
+  activeProviderName,
+  quotaExhausted,
+} from "../flight-lookup/index.ts";
 import { isFailure } from "../flight-lookup/types.ts";
 import { requireUser, type Ctx } from "../session.ts";
 
@@ -64,6 +70,15 @@ export async function lookupFlightQuery(ctx: Ctx): Promise<unknown> {
       // candidate that cannot be drawn on the map.
       throw new HttpError(422, "The provider returned a flight this app cannot place on a map.");
 
+    case "quota-exhausted":
+      // The plan expired or ran out of units. Nothing about the network is
+      // wrong, so this must not borrow the outage's wording: "try again shortly"
+      // would have somebody refreshing a button that cannot work until the
+      // provider's account is paid for. It says which account, what is wrong and
+      // what to do, and it is the same sentence the status endpoint offers
+      // before anyone presses anything.
+      throw new HttpError(result.reason.retryable ? 429 : 503, quotaMessage(result.reason.retryable));
+
     case "provider-unavailable":
       // 502, not 500: the failure is upstream, and a client that retries is
       // behaving correctly. A 500 would say the app itself is broken.
@@ -71,8 +86,33 @@ export async function lookupFlightQuery(ctx: Ctx): Promise<unknown> {
   }
 }
 
-/** Whether the UI should offer the lookup at all. Costs no provider call. */
+/**
+ * What the user is told when the key's allowance is spent.
+ *
+ * One sentence, used in both places it is needed — the failed lookup and the
+ * status endpoint — because a message that appears only after the failure is a
+ * message the user has already clicked once to earn.
+ *
+ * `retryable` is the difference the provider draws: a 429 is its rate window,
+ * which closes by itself, and a 402 is the plan. Telling those two apart is the
+ * whole point of carrying the flag rather than collapsing both into "no data".
+ */
+function quotaMessage(retryable: boolean): string {
+  return retryable
+    ? "Live flight lookup is rate limited right now — AeroDataBox is throttling this key. Try again in a moment; nothing else is affected."
+    : "Live flight lookup is off: the AeroDataBox plan is expired or this month's API units are used up. Top up or renew the plan on aerodatabox.com to switch it back on. Everything else here works without it.";
+}
+
+/**
+ * Whether the UI should offer the lookup at all. Costs no provider call.
+ *
+ * `unavailable` carries the reason when the provider has already refused this
+ * key, so a panel can say why instead of rendering a button that is guaranteed
+ * to fail. It is `null` in every other case, including the ordinary one where
+ * no provider is configured at all.
+ */
 export function lookupStatus(ctx: Ctx): unknown {
   requireUser(ctx);
-  return { configured: isConfigured() };
+  const quota = quotaExhausted();
+  return { configured: isConfigured(), unavailable: quota ? quotaMessage(quota.retryable) : null };
 }

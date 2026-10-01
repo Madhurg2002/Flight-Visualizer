@@ -99,10 +99,38 @@ const answers = new Map<string, Cached>();
  */
 const inFlight = new Map<string, Promise<LookupResult>>();
 
+/**
+ * The last thing the provider said about the key's allowance, if it said
+ * something bad.
+ *
+ * Remembered so the status endpoint can explain a dead lookup *before* the
+ * user clicks a button that cannot work — the alternative is a control that
+ * promises a real schedule and answers with a failure every single time.
+ *
+ * It expires, and deliberately: a top-up on the provider's dashboard does not
+ * restart this process, so a remembered refusal must not disable the feature
+ * for the life of the deployment. Ten minutes is long enough to stop the
+ * button being offered while nothing can come of pressing it, and short enough
+ * that the feature comes back on its own once somebody pays for more units.
+ */
+const QUOTA_TTL_MS = 10 * 60_000;
+let quota: { retryable: boolean; at: number } | null = null;
+
+/** The provider's standing objection to this key, or null if it has none. */
+export function quotaExhausted(): { retryable: boolean } | null {
+  if (!quota) return null;
+  if (Date.now() - quota.at >= QUOTA_TTL_MS) {
+    quota = null;
+    return null;
+  }
+  return { retryable: quota.retryable };
+}
+
 /** Forgets every memoised answer. Used by the checks, which stub the network. */
 export function resetLookupCache(): void {
   answers.clear();
   inFlight.clear();
+  quota = null;
 }
 
 function apiKey(): string | null {
@@ -355,6 +383,15 @@ function interpret(status: number, body: unknown): LookupResult {
   if (status === 401 || status === 403 || status === 451) {
     return { ok: false, reason: { kind: "provider-rejected" } };
   }
+  // Billing answers, not outages. The provider returns 402 with "Your plan is
+  // expired and/or included monthly API units and credits have been exhausted"
+  // once the plan's few hundred calls a month are gone, and 429 when the
+  // allowance is being spent faster than its window allows. Neither is a bad
+  // flight number, neither is fixed by a DNS check, and neither is worth
+  // retrying as if the network were at fault — so they get their own reason
+  // and the wording to match.
+  if (status === 402) return { ok: false, reason: { kind: "quota-exhausted", retryable: false } };
+  if (status === 429) return { ok: false, reason: { kind: "quota-exhausted", retryable: true } };
   if (status !== 200) return { ok: false, reason: { kind: "provider-unavailable" } };
 
   const rows = Array.isArray(body) ? body : [];
@@ -389,6 +426,22 @@ export const aeroDataBoxProvider: FlightProvider = {
     const answer = (async (): Promise<LookupResult> => {
       const { status, body } = await request(requestUrl(query), key);
       const result = interpret(status, body);
+
+      // An answer that works clears the standing objection, so a topped-up plan
+      // is noticed by the next real lookup rather than only by the clock.
+      if (result.ok) {
+        quota = null;
+      } else if (result.reason.kind === "quota-exhausted") {
+        quota = { retryable: result.reason.retryable, at: Date.now() };
+        // Logged rather than returned: this is the one failure the operator can
+        // only fix by paying for something, and it belongs in the host's log
+        // where they will actually look for it.
+        console.warn(
+          result.reason.retryable
+            ? "AeroDataBox answered 429: this key is being rate limited. Live lookup will recover on its own."
+            : "AeroDataBox answered 402: this key's plan is expired or its monthly API units are spent. Live lookup stays off until it is topped up.",
+        );
+      }
       // Only a settled answer is remembered. A miss is remembered too — the
       // provider is the authority on whether the flight exists — but an
       // upstream failure is not, so a provider that is briefly down is retried
