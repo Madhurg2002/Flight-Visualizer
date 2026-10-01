@@ -65,6 +65,13 @@ export async function lookupFlightQuery(ctx: Ctx): Promise<unknown> {
       throw new UserError("That is not a flight the provider will answer.");
 
     case "provider-rejected":
+      // The provider would not accept the key. That is the operator's problem
+      // and has nothing to do with the flight that was asked for, so it says so
+      // rather than borrowing the unusable-answer wording below — which would
+      // send somebody to look at a map that is working perfectly.
+      throw new HttpError(422, rejectedKeyMessage());
+
+    case "provider-unplaceable":
       // The provider answered about a flight, but not one this app can use —
       // an airport it has no coordinates for. Saying so beats offering a
       // candidate that cannot be drawn on the map.
@@ -84,6 +91,19 @@ export async function lookupFlightQuery(ctx: Ctx): Promise<unknown> {
       // behaving correctly. A 500 would say the app itself is broken.
       throw new HttpError(502, "The flight data provider did not answer. Try again shortly.");
   }
+}
+
+/**
+ * What the user is told when the provider refuses the key itself.
+ *
+ * A `401` and a `403` are told apart in the message because they have
+ * different fixes: one is a bad, revoked or rotated key, the other is a valid
+ * key whose plan does not reach this endpoint. The reader has to be able to
+ * tell them apart from the sentence alone, because the API log they would
+ * otherwise go and read says nothing about which it was.
+ */
+function rejectedKeyMessage(): string {
+  return "Live flight lookup is off: AeroDataBox refused this API key. It may be invalid or revoked, or the plan behind it may not include this endpoint — check the key and your subscription on aerodatabox.com. Everything else here works without it.";
 }
 
 /**

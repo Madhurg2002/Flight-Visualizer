@@ -1154,6 +1154,7 @@ console.log("flight lookup");
     stub({ "aerodatabox.com": [unknownCodes] });
     const unplaceable = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("an airport under neither code is still refused", unplaceable.status, 422);
+    equal("  with the unusable-answer wording", unplaceable.body?.error, "The provider returned a flight this app cannot place on a map.");
   }
 
   {
@@ -1172,13 +1173,32 @@ console.log("flight lookup");
   }
 
   {
-    // A 401 is a key the provider will not accept, which is the operator's
-    // problem to fix — not a bad flight number, and not an outage. Reporting it
-    // as a 422 would point at the wrong thing entirely.
+    // A 401 and a 403 are the operator's credential, not the flight that was
+    // asked for. They used to share the unusable-answer wording with a 451,
+    // which sent the reader to a map that was working perfectly.
     resetLookupCache();
     globalThis.fetch = (async () => new Response(JSON.stringify({ message: "nope" }), { status: 401 })) as typeof fetch;
     const badKey = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
     equal("a rejected key is refused rather than reported as a miss", badKey.status, 422);
+    check("  and says the key was refused", /key/i.test(String(badKey.body?.error)), badKey.body);
+    check("  and does not blame the map", !/place on a map/i.test(String(badKey.body?.error)), badKey.body);
+    check("  and does not blame the network", !/did not answer/i.test(String(badKey.body?.error)), badKey.body);
+
+    // 403 is a valid key that is not entitled to this endpoint. Different fix,
+    // so it has to be readable as its own answer rather than as a 401's.
+    resetLookupCache();
+    globalThis.fetch = (async () => new Response(JSON.stringify({ message: "forbidden" }), { status: 403 })) as typeof fetch;
+    const noEntitlement = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("a key without entitlement is refused the same way", noEntitlement.status, 422);
+    check("  and says the plan may not cover it", /plan/i.test(String(noEntitlement.body?.error)), noEntitlement.body);
+    check("  and is still not about the map", !/place on a map/i.test(String(noEntitlement.body?.error)), noEntitlement.body);
+
+    // 451 is not a credential problem, so it keeps the unusable-answer wording.
+    resetLookupCache();
+    globalThis.fetch = (async () => new Response(JSON.stringify({ message: "unavailable" }), { status: 451 })) as typeof fetch;
+    const restricted = await caller.call("GET", "/api/lookup/flight?airline=UA&flightNumber=1234");
+    equal("a 451 is still a 422", restricted.status, 422);
+    equal("  and keeps the message about placing a flight", restricted.body?.error, "The provider returned a flight this app cannot place on a map.");
 
     // 402 and 429 are billing answers. The free plan returns 402 with "your
     // plan is expired and/or included monthly API units and credits have been
