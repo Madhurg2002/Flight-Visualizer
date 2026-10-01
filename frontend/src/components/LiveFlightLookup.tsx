@@ -46,6 +46,21 @@ export function LiveFlightLookup({
 
   if (!parsed) return null;
 
+  // The provider has already refused this key — an expired plan, or this
+  // month's units spent. The reason is shown instead of the button, because a
+  // button here can only fail, and "the provider did not answer" is what
+  // somebody reads before they go and check their own connection.
+  if (status.unavailable) {
+    return (
+      <div className="mt-3 rounded-xl border border-paper-300 bg-paper-50/60 p-3">
+        <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-500">
+          <Radio className="mt-px size-3.5 shrink-0" />
+          <span>{status.unavailable}</span>
+        </p>
+      </div>
+    );
+  }
+
   async function run() {
     if (!parsed || queryKey === null) return;
     setBusy(true);

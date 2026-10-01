@@ -27,6 +27,7 @@ meant.
 | Candidate ranking | **Shipped** | Both endpoints known → the route is certain |
 | Airline-only suggestions | **Partial** | Offline it suggests the carrier's hub routes; with a flight provider configured it can check the real schedule |
 | Live flight lookup | **Partial** | `GET /lookup/flight` against a real provider, server-side. The UI offers it only when a key is configured, so the app is unchanged without one |
+| Quota and rate-limit reporting | **Shipped** | An expired plan (402) or a rate-limited key (429) is reported as itself, not as a network outage — with a message naming what to do, shown before the button rather than after it |
 | Confidence labelling | **Shipped** | Every candidate shows `exact` / `high` / `medium` and why |
 | "Still needs" reporting | **Shipped** | Names the missing fields rather than guessing |
 | Boarding-pass photo (OCR) | **Planned** | — |

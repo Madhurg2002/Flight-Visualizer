@@ -53,13 +53,28 @@ export type FlightLookup = {
   note?: string;
 };
 
-/** Why a lookup could not be answered. Never rendered raw. */
+/**
+ * Why a lookup could not be answered. Never rendered raw.
+ *
+ * `quota-exhausted` is its own kind rather than a flavour of
+ * `provider-unavailable` because the two need opposite answers from the user.
+ * An outage is worth retrying in a moment; an exhausted plan is not, and the
+ * fix is a top-up rather than a refresh. Collapsing them into one reason is how
+ * "your account has run out of API units" ended up being reported to the user
+ * as "the flight data provider did not answer" — a message that sends the
+ * reader to look at the wrong system entirely.
+ *
+ * `retryable` is the whole difference: a `429` clears on its own within the
+ * provider's window, while a `402` (plan expired, monthly units spent) does not
+ * until somebody pays for more.
+ */
 export type LookupFailure =
   | { kind: "not-configured" }
   | { kind: "invalid" }
   | { kind: "not-found" }
   | { kind: "provider-unavailable" }
-  | { kind: "provider-rejected" };
+  | { kind: "provider-rejected" }
+  | { kind: "quota-exhausted"; retryable: boolean };
 
 export type LookupResult = { ok: true; flight: FlightLookup } | { ok: false; reason: LookupFailure };
 

@@ -150,7 +150,16 @@ export const api = {
     resolve: endpoint<{ query: string }, ResolveResult>("GET", "/resolve"),
   },
   lookup: {
-    status: endpoint<Record<string, never>, { configured: boolean }>("GET", "/lookup/status"),
+    /**
+     * `unavailable` is the reason the provider has already refused this key —
+     * an expired plan or spent units — or null. It is null in the ordinary
+     * cases, including having no key at all, so a client only has to look at
+     * `configured` to know whether a lookup is worth offering.
+     */
+    status: endpoint<Record<string, never>, { configured: boolean; unavailable: string | null }>(
+      "GET",
+      "/lookup/status",
+    ),
     flight: endpoint<
       { airline: string; flightNumber: string; date?: string },
       FlightLookupResult
