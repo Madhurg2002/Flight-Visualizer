@@ -376,12 +376,17 @@ function interpret(status: number, body: unknown): LookupResult {
   // difference decides whether the client offers to search by date instead.
   if (status === 204) return { ok: false, reason: { kind: "not-found" } };
   if (status === 400) return { ok: false, reason: { kind: "invalid" } };
-  // 401 is a key the provider will not accept, 403 an account not entitled to
-  // this endpoint, 451 a plan that does not cover it. All three are the
-  // operator's configuration to fix, and none of them is a bad flight number,
-  // so they are refused rather than reported as a miss that invites a retry.
-  if (status === 401 || status === 403 || status === 451) {
+  // 401 is a key the provider will not accept and 403 an account not entitled
+  // to this endpoint. Both are the operator's credential, and neither is
+  // anything about the flight that was asked for, so they are one reason: the
+  // key was refused.
+  if (status === 401 || status === 403) {
     return { ok: false, reason: { kind: "provider-rejected" } };
+  }
+  // 451 is an answer this app cannot use rather than a credential problem, so
+  // it joins the unusable-answer case below and is reported with it.
+  if (status === 451) {
+    return { ok: false, reason: { kind: "provider-unplaceable" } };
   }
   // Billing answers, not outages. The provider returns 402 with "Your plan is
   // expired and/or included monthly API units and credits have been exhausted"
@@ -404,7 +409,7 @@ function interpret(status: number, body: unknown): LookupResult {
   // Something came back, but nothing usable: the airports do not resolve to
   // codes this app has coordinates for, so there is nothing that could be
   // saved or drawn.
-  return { ok: false, reason: { kind: "provider-rejected" } };
+  return { ok: false, reason: { kind: "provider-unplaceable" } };
 }
 
 export const aeroDataBoxProvider: FlightProvider = {

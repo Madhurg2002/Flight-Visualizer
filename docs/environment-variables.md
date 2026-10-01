@@ -320,12 +320,19 @@ They are their own reason now, and they say what they are:
 
 | Provider says | The API answers | The user is told |
 | --- | --- | --- |
+| `401`, `403` | `422` | The key was refused — invalid, revoked, or not entitled to this endpoint. |
 | `402` | `503` | Live flight lookup is off: the plan is expired or this month's units are used up. Top up or renew it. |
 | `429` | `429` | Live flight lookup is rate limited right now. Try again in a moment. |
+| `451` | `422` | The provider returned a flight this app cannot place on a map. |
 | timeout, DNS, TLS, `5xx` | `502` | The flight data provider did not answer. Try again shortly. |
 
 Only the last one is a network problem, and it is the only one that suggests
 retrying.
+
+A refused key and an unusable answer are deliberately different sentences. They
+used to share one: a `401` was reported as *"The provider returned a flight this
+app cannot place on a map"*, which sent the reader to a map that was working
+perfectly while the actual problem sat on the provider's dashboard.
 
 A spent plan is also remembered for ten minutes, and reported by
 `GET /lookup/status` as `unavailable`, so the panel explains itself instead of

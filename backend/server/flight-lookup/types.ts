@@ -56,17 +56,21 @@ export type FlightLookup = {
 /**
  * Why a lookup could not be answered. Never rendered raw.
  *
- * `quota-exhausted` is its own kind rather than a flavour of
- * `provider-unavailable` because the two need opposite answers from the user.
- * An outage is worth retrying in a moment; an exhausted plan is not, and the
- * fix is a top-up rather than a refresh. Collapsing them into one reason is how
- * "your account has run out of API units" ended up being reported to the user
- * as "the flight data provider did not answer" — a message that sends the
- * reader to look at the wrong system entirely.
+ * Each of these needs a different sentence, which is why they are separate
+ * kinds rather than one reason with a message attached. Every time two
+ * genuinely different problems have shared a kind here, the user has been
+ * told to look at the wrong system: an exhausted plan was reported as a
+ * network outage, and a refused key was reported as a flight the map could not
+ * draw. Both were unhelpful in the same way — the message named something
+ * other than the thing to go and fix.
  *
- * `retryable` is the whole difference: a `429` clears on its own within the
- * provider's window, while a `402` (plan expired, monthly units spent) does not
- * until somebody pays for more.
+ * - `provider-rejected` — the provider refused the *key* (401, 403). The
+ *   operator's problem, and nothing about the flight asked.
+ * - `provider-unplaceable` — the provider answered, but with something this
+ *   app cannot use: an airport it has no coordinates for.
+ * - `quota-exhausted` — the plan is spent. `retryable` is the whole
+ *   difference: a `429` clears on its own, a `402` does not until somebody
+ *   pays for more.
  */
 export type LookupFailure =
   | { kind: "not-configured" }
@@ -74,6 +78,7 @@ export type LookupFailure =
   | { kind: "not-found" }
   | { kind: "provider-unavailable" }
   | { kind: "provider-rejected" }
+  | { kind: "provider-unplaceable" }
   | { kind: "quota-exhausted"; retryable: boolean };
 
 export type LookupResult = { ok: true; flight: FlightLookup } | { ok: false; reason: LookupFailure };
